@@ -98,7 +98,7 @@ export async function sendAdmissionTicket(
           </td>
         </tr>
         <tr>
-          <td width="52%" valign="middle" style="padding:16px">
+          <td width="48%" valign="middle" style="padding:16px">
             <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
             <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
             <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
@@ -107,19 +107,15 @@ export async function sendAdmissionTicket(
             <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>
             <p style="margin:14px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:1px">PRESENT THIS TICKET AT ENTRY</p>
           </td>
-          <td width="48%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
+          <td width="52%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
               <tr>
-                <td width="62%" valign="middle" style="padding:3px;text-align:center">
+                <td valign="middle" style="padding:12px 8px;text-align:center">
                   ${
                     safePosterUrl
-                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="124" style="display:block;width:100%;max-width:124px;height:auto;max-height:186px;object-fit:contain;margin:0 auto;border-radius:4px">`
-                      : `<div style="box-sizing:border-box;width:100%;max-width:124px;height:186px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
+                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="220" style="display:block;width:100%;max-width:220px;height:auto;object-fit:contain;margin:0 auto;border-radius:4px">`
+                      : `<div style="box-sizing:border-box;width:100%;max-width:220px;height:310px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
                   }
-                </td>
-                <td width="38%" valign="middle" style="padding:3px;text-align:center">
-                  <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="84" height="84" style="display:block;width:100%;max-width:84px;height:auto;margin:0 auto">
-                  <p style="margin:5px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:.5px">EVENT INFO</p>
                 </td>
               </tr>
             </table>
@@ -128,6 +124,17 @@ export async function sendAdmissionTicket(
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #c7b995">
+        <tr>
+          <td valign="middle" style="padding:18px 8px 0;text-align:center">
+            <p style="margin:0;color:#15294b;font-family:Georgia,serif;font-size:26px;font-weight:bold;line-height:1.2">SEE YOU THERE ❤️</p>
+          </td>
+          <td align="center" valign="middle" style="padding:18px 8px 0">
+            <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
+            <p style="margin:6px 0 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">EVENT INFO</p>
+          </td>
+        </tr>
+      </table>
     </main>
   </body>
 </html>`;
