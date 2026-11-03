@@ -86,28 +86,26 @@ export async function sendAdmissionTicket(
       <p style="margin:0;color:#80643a;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">Mongolian Students' Association in Italy</p>
       <h1 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:32px">${safeTitle}</h1>
       <p>Hello ${safeName}, your admission is confirmed.</p>
-      <div style="margin:24px 0;padding:20px;border:1px dashed #80643a;border-radius:12px">
-        <p style="margin:0 0 8px;font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase">Admission ticket</p>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:collapse">
-          <tr>
-            <td width="50%" valign="top" style="padding:8px;text-align:center">
-              ${
-                safePosterUrl
-                  ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto;border-radius:8px">`
-                  : `<div style="box-sizing:border-box;width:100%;max-width:220px;min-height:240px;margin:0 auto;padding:24px 12px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:22px">${safeTitle}<p style="font-family:Arial,sans-serif;font-size:12px">Event poster coming soon</p></div>`
-              }
-            </td>
-            <td width="50%" valign="top" style="padding:8px;text-align:center">
-              <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="220" height="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto">
-              <p style="margin:8px 0 0;font-size:12px">Scan for event details</p>
-            </td>
-          </tr>
-        </table>
-        <p style="margin:0 0 18px;font-family:monospace;font-size:22px;font-weight:bold">${safeTicketCode}</p>
-        <p style="margin:6px 0"><strong>Date:</strong> ${safeDate}</p>
-        <p style="margin:6px 0"><strong>Time:</strong> ${safeTime}</p>
-        <p style="margin:6px 0"><strong>Location:</strong> ${safeLocation}</p>
-      </div>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px dashed #80643a;border-radius:12px;border-collapse:separate;background:#fffdf8">
+        <tr>
+          <td width="65%" valign="middle" style="padding:16px">
+            <p style="margin:0 0 12px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#80643a">Admission ticket</p>
+            <p style="margin:0 0 16px;font-family:monospace;font-size:19px;font-weight:bold;overflow-wrap:anywhere">${safeTicketCode}</p>
+            <p style="margin:7px 0;font-size:13px"><strong>Date:</strong> ${safeDate}</p>
+            <p style="margin:7px 0;font-size:13px"><strong>Time:</strong> ${safeTime}</p>
+            <p style="margin:7px 0;font-size:13px;overflow-wrap:anywhere"><strong>Location:</strong> ${safeLocation}</p>
+          </td>
+          <td width="35%" valign="middle" style="padding:12px 12px 12px 0;text-align:center">
+            ${
+              safePosterUrl
+                ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="110" style="display:block;width:100%;max-width:110px;height:auto;max-height:135px;object-fit:contain;margin:0 auto 10px;border-radius:5px">`
+                : `<div style="box-sizing:border-box;width:100%;max-width:110px;height:110px;margin:0 auto 10px;padding:12px 6px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:14px">${safeTitle}</div>`
+            }
+            <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
+            <p style="margin:5px 0 0;font-size:9px">Scan for event details</p>
+          </td>
+        </tr>
+      </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
     </main>
