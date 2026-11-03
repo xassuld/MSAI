@@ -22,6 +22,7 @@ export default function RsvpForm() {
         `${backendApiUrl}/api/events/christmas/registrations`,
         {
           method: "POST",
+          signal: AbortSignal.timeout(30_000),
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: formData.get("name"),
@@ -45,7 +46,9 @@ export default function RsvpForm() {
       form.reset();
     } catch (error) {
       setMessage(
-        error instanceof Error
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? "The request timed out. Your sign-up may have been saved; check your inbox and spam folder before trying again."
+          : error instanceof Error
           ? error.message
           : "Could not complete your sign-up. Please try again.",
       );
