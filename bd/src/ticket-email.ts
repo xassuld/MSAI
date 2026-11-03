@@ -86,23 +86,43 @@ export async function sendAdmissionTicket(
       <p style="margin:0;color:#80643a;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">Mongolian Students' Association in Italy</p>
       <h1 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:32px">${safeTitle}</h1>
       <p>Hello ${safeName}, your admission is confirmed.</p>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px dashed #80643a;border-radius:12px;border-collapse:separate;background:#fffdf8">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #c7b995;border-radius:12px;border-collapse:separate;background:#fffdf8">
         <tr>
-          <td width="65%" valign="middle" style="padding:16px">
-            <p style="margin:0 0 12px;font-size:11px;font-weight:bold;letter-spacing:1px;text-transform:uppercase;color:#80643a">Admission ticket</p>
-            <p style="margin:0 0 16px;font-family:monospace;font-size:19px;font-weight:bold;overflow-wrap:anywhere">${safeTicketCode}</p>
-            <p style="margin:7px 0;font-size:13px"><strong>Date:</strong> ${safeDate}</p>
-            <p style="margin:7px 0;font-size:13px"><strong>Time:</strong> ${safeTime}</p>
-            <p style="margin:7px 0;font-size:13px;overflow-wrap:anywhere"><strong>Location:</strong> ${safeLocation}</p>
+          <td colspan="2" style="padding:10px 16px;background:#15294b;border-radius:11px 11px 0 0">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td style="color:#fffdf8;font-size:11px;font-weight:bold;letter-spacing:2px">ADMISSION TICKET</td>
+                <td align="right" style="color:#e4c77e;font-size:10px;font-weight:bold;letter-spacing:1px">MSAI · EVENT PASS</td>
+              </tr>
+            </table>
           </td>
-          <td width="35%" valign="middle" style="padding:12px 12px 12px 0;text-align:center">
-            ${
-              safePosterUrl
-                ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="110" style="display:block;width:100%;max-width:110px;height:auto;max-height:135px;object-fit:contain;margin:0 auto 10px;border-radius:5px">`
-                : `<div style="box-sizing:border-box;width:100%;max-width:110px;height:110px;margin:0 auto 10px;padding:12px 6px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:14px">${safeTitle}</div>`
-            }
-            <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
-            <p style="margin:5px 0 0;font-size:9px">Scan for event details</p>
+        </tr>
+        <tr>
+          <td width="60%" valign="middle" style="padding:16px">
+            <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
+            <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
+            <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">DATE</strong><br>${safeDate}</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TIME</strong><br>${safeTime}</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>
+            <p style="margin:14px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:1px">PRESENT THIS TICKET AT ENTRY</p>
+          </td>
+          <td width="40%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
+              <tr>
+                <td width="50%" valign="middle" style="padding:3px;text-align:center">
+                  ${
+                    safePosterUrl
+                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="76" style="display:block;width:100%;max-width:76px;height:auto;max-height:112px;object-fit:contain;margin:0 auto;border-radius:4px">`
+                      : `<div style="box-sizing:border-box;width:100%;max-width:76px;height:76px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
+                  }
+                </td>
+                <td width="50%" valign="middle" style="padding:3px;text-align:center">
+                  <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="76" height="76" style="display:block;width:100%;max-width:76px;height:auto;margin:0 auto">
+                  <p style="margin:5px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:.5px">EVENT INFO</p>
+                </td>
+              </tr>
+            </table>
           </td>
         </tr>
       </table>
