@@ -1,0 +1,18 @@
+{
+  "name": "msai",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "fd",
+    "bd"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"npm run dev --workspace=bd\" \"npm run dev --workspace=fd\"",
+    "build": "npm run build --workspace=fd && npm run typecheck --workspace=bd",
+    "lint": "npm run lint --workspace=fd && npm run lint --workspace=bd",
+    "typecheck": "npm run typecheck --workspace=fd && npm run typecheck --workspace=bd"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}
