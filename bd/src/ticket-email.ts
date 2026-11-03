@@ -98,7 +98,7 @@ export async function sendAdmissionTicket(
           </td>
         </tr>
         <tr>
-          <td width="60%" valign="middle" style="padding:16px">
+          <td width="52%" valign="middle" style="padding:16px">
             <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
             <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
             <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
@@ -107,18 +107,18 @@ export async function sendAdmissionTicket(
             <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>
             <p style="margin:14px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:1px">PRESENT THIS TICKET AT ENTRY</p>
           </td>
-          <td width="40%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
+          <td width="48%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
               <tr>
-                <td width="50%" valign="middle" style="padding:3px;text-align:center">
+                <td width="62%" valign="middle" style="padding:3px;text-align:center">
                   ${
                     safePosterUrl
-                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="76" style="display:block;width:100%;max-width:76px;height:auto;max-height:112px;object-fit:contain;margin:0 auto;border-radius:4px">`
-                      : `<div style="box-sizing:border-box;width:100%;max-width:76px;height:76px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
+                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="124" style="display:block;width:100%;max-width:124px;height:auto;max-height:186px;object-fit:contain;margin:0 auto;border-radius:4px">`
+                      : `<div style="box-sizing:border-box;width:100%;max-width:124px;height:186px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
                   }
                 </td>
-                <td width="50%" valign="middle" style="padding:3px;text-align:center">
-                  <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="76" height="76" style="display:block;width:100%;max-width:76px;height:auto;margin:0 auto">
+                <td width="38%" valign="middle" style="padding:3px;text-align:center">
+                  <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="84" height="84" style="display:block;width:100%;max-width:84px;height:auto;margin:0 auto">
                   <p style="margin:5px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:.5px">EVENT INFO</p>
                 </td>
               </tr>
