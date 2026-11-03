@@ -86,23 +86,23 @@ export async function sendAdmissionTicket(
       <p style="margin:0;color:#80643a;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">Mongolian Students' Association in Italy</p>
       <h1 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:32px">${safeTitle}</h1>
       <p>Hello ${safeName}, your admission is confirmed.</p>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border-collapse:collapse">
-        <tr>
-          <td width="50%" valign="top" style="padding:8px;text-align:center">
-            ${
-              safePosterUrl
-                ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto;border-radius:8px">`
-                : `<div style="box-sizing:border-box;width:100%;max-width:220px;min-height:240px;margin:0 auto;padding:24px 12px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:22px">${safeTitle}<p style="font-family:Arial,sans-serif;font-size:12px">Event poster coming soon</p></div>`
-            }
-          </td>
-          <td width="50%" valign="top" style="padding:8px;text-align:center">
-            <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="220" height="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto">
-            <p style="margin:8px 0 0;font-size:12px">Scan for event details</p>
-          </td>
-        </tr>
-      </table>
       <div style="margin:24px 0;padding:20px;border:1px dashed #80643a;border-radius:12px">
         <p style="margin:0 0 8px;font-size:12px;font-weight:bold;letter-spacing:1px;text-transform:uppercase">Admission ticket</p>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 18px;border-collapse:collapse">
+          <tr>
+            <td width="50%" valign="top" style="padding:8px;text-align:center">
+              ${
+                safePosterUrl
+                  ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto;border-radius:8px">`
+                  : `<div style="box-sizing:border-box;width:100%;max-width:220px;min-height:240px;margin:0 auto;padding:24px 12px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:22px">${safeTitle}<p style="font-family:Arial,sans-serif;font-size:12px">Event poster coming soon</p></div>`
+              }
+            </td>
+            <td width="50%" valign="top" style="padding:8px;text-align:center">
+              <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="220" height="220" style="display:block;width:100%;max-width:220px;height:auto;margin:0 auto">
+              <p style="margin:8px 0 0;font-size:12px">Scan for event details</p>
+            </td>
+          </tr>
+        </table>
         <p style="margin:0 0 18px;font-family:monospace;font-size:22px;font-weight:bold">${safeTicketCode}</p>
         <p style="margin:6px 0"><strong>Date:</strong> ${safeDate}</p>
         <p style="margin:6px 0"><strong>Time:</strong> ${safeTime}</p>
