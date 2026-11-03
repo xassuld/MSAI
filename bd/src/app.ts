@@ -159,7 +159,12 @@ app.post("/api/events/christmas/registrations", async (request, response, next) 
     return;
   }
 
-  if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM_EMAIL) {
+  if (
+    !process.env.GMAIL_CLIENT_ID ||
+    !process.env.GMAIL_CLIENT_SECRET ||
+    !process.env.GMAIL_REFRESH_TOKEN ||
+    !process.env.GMAIL_USER
+  ) {
     response.status(503).json({
       error: "Ticket email is not configured. Please contact the event organizers.",
     });

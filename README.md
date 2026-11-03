@@ -9,7 +9,7 @@ The site is split into two workspace projects:
 
 1. Keep backend credentials in `bd/.env.local`. Start from `bd/.env.example` if setting up a new machine. The backend also loads `bd/.env` as a fallback. Do not copy backend secrets into the frontend.
 2. Set `ADMIN_PASSWORD` and an `ADMIN_SESSION_SECRET` with at least 32 characters in `bd/.env.local`.
-3. Configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in `bd/.env.local` to send admission tickets. Resend has a free transactional email plan with a daily limit; verify the sender address/domain in Resend.
+3. Configure Gmail API OAuth credentials in `bd/.env.local` to send admission tickets: `GMAIL_USER`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN`. This sends from Gmail over HTTPS and does not require owning a custom domain.
 4. Keep `NEXT_PUBLIC_API_URL=http://localhost:4000` in `fd/.env.local`.
 5. From the repository root, run `npm install` once, then `npm run dev`.
 6. Open the frontend URL printed by Next.js and visit `/admin` to edit the event.
@@ -40,16 +40,18 @@ Set these environment variables in the Render service's **Environment** settings
 - `CLOUDINARY_API_SECRET`
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET` — at least 32 characters
-- `RESEND_API_KEY` — secret API key from Resend
-- `RESEND_FROM_EMAIL` — a sender address verified with Resend
+- `GMAIL_USER` — the Gmail address that authorized the Gmail API
+- `GMAIL_CLIENT_ID` — OAuth client ID from Google Cloud
+- `GMAIL_CLIENT_SECRET` — OAuth client secret; keep it backend-only
+- `GMAIL_REFRESH_TOKEN` — Gmail API refresh token with the `gmail.send` permission; keep it backend-only
 - `TRUST_PROXY=true` — use Render's forwarded client IP for sign-up and login rate limits
 - `FRONTEND_ORIGINS` — the exact frontend HTTPS origin, with no trailing slash
 
 Keep backend secrets only in Render, never in the frontend project. Render sets `PORT` for the service automatically. In MongoDB Atlas, allowlist the outbound IP addresses or ranges shown in the Render service settings.
 
-Resend's published Free plan is $0/month and includes up to 3,000 transactional emails per month, limited to 100 per day. Check [Resend pricing](https://resend.com/pricing) for current limits. Verify the sender address/domain in Resend before sending tickets.
+For Gmail API ticket setup, follow [GMAIL-API-SETUP.md](./GMAIL-API-SETUP.md). The sending address is the Gmail account you authorize; the website can continue using its `vercel.app` address.
 
-After both services are deployed, set the Render service URL as the frontend's `NEXT_PUBLIC_API_URL` and the frontend URL as the backend's `FRONTEND_ORIGINS`, then redeploy both. Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, sign out, and test an event sign-up with Resend ticket delivery. Admin sessions require HTTPS.
+After both services are deployed, set the Render service URL as the frontend's `NEXT_PUBLIC_API_URL` and the frontend URL as the backend's `FRONTEND_ORIGINS`, then redeploy both. Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, sign out, and test an event sign-up with Gmail ticket delivery. Admin sessions require HTTPS.
 
 GitHub Actions runs lint and the production build on pushes and pull requests. The build also type-checks the backend.
 
