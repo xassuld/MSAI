@@ -9,23 +9,30 @@ The site is split into two workspace projects:
 
 1. Keep backend credentials in `bd/.env.local`. Start from `bd/.env.example` if setting up a new machine. The backend also loads `bd/.env` as a fallback. Do not copy backend secrets into the frontend.
 2. Set `ADMIN_PASSWORD` and an `ADMIN_SESSION_SECRET` with at least 32 characters in `bd/.env.local`.
-3. Keep `NEXT_PUBLIC_API_URL=http://localhost:4000` in `fd/.env.local`.
-4. From the repository root, run `npm install` once, then `npm run dev`.
-5. Open the frontend URL printed by Next.js and visit `/admin` to edit the event.
+3. Configure `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in `bd/.env.local` to send admission tickets. Resend has a free transactional email plan with a daily limit; verify the sender address/domain in Resend.
+4. Keep `NEXT_PUBLIC_API_URL=http://localhost:4000` in `fd/.env.local`.
+5. From the repository root, run `npm install` once, then `npm run dev`.
+6. Open the frontend URL printed by Next.js and visit `/admin` to edit the event.
 
 The backend defaults to port `4000` and allows the local frontend origins on ports `3000` and `3001`. If Next.js chooses another port, add that origin to `FRONTEND_ORIGINS` in `bd/.env.local`.
 
 ## Production
 
-Deploy the frontend and backend as separate Vercel projects from the same GitHub repository:
+Deploy the frontend on Vercel and the backend as a Render web service from the same GitHub repository:
 
 ### Frontend project
 
-Set the project root to `fd/` and use the Next.js preset. Set `NEXT_PUBLIC_API_URL` to the backend project's public HTTPS URL in the Vercel **Production** environment. This variable is embedded at build time, so redeploy after changing it.
+Set the project root to `fd/` and use the Next.js preset. Set `NEXT_PUBLIC_API_URL` to the Render backend's public HTTPS URL in the Vercel **Production** environment. This variable is embedded at build time, so redeploy after changing it. Admin requests are proxied through the frontend origin so browsers can reliably retain the admin session cookie.
 
-### Backend project
+### Backend service
 
-Import the same repository as another Vercel project and set the project root to `bd/`. Vercel detects the Express app. Set these environment variables in the backend project's Vercel settings:
+Create a **Web Service** in Render and connect this repository. Leave the root directory as `.` so Render can access the root npm workspace and lockfile. Configure:
+
+- Build command: `npm ci && npm run build --workspace=bd`
+- Start command: `npm run start --workspace=bd`
+- Health check path: `/api/health`
+
+Set these environment variables in the Render service's **Environment** settings:
 
 - `MONGODB_URI`
 - `CLOUDINARY_CLOUD_NAME`
@@ -33,13 +40,16 @@ Import the same repository as another Vercel project and set the project root to
 - `CLOUDINARY_API_SECRET`
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET` — at least 32 characters
+- `RESEND_API_KEY` — secret API key from Resend
+- `RESEND_FROM_EMAIL` — a sender address verified with Resend
+- `TRUST_PROXY=true` — use Render's forwarded client IP for sign-up and login rate limits
 - `FRONTEND_ORIGINS` — the exact frontend HTTPS origin, with no trailing slash
 
-Keep backend secrets only in the backend project, never in the frontend project. Vercel sets `NODE_ENV` for production automatically.
+Keep backend secrets only in Render, never in the frontend project. Render sets `PORT` for the service automatically. In MongoDB Atlas, allowlist the outbound IP addresses or ranges shown in the Render service settings.
 
-Vercel functions use dynamic outbound IPs by default. To keep MongoDB Atlas IP access restricted, use Vercel Static IPs (Pro or Enterprise) and allowlist those addresses. Otherwise, Atlas requires a broad `0.0.0.0/0` rule for Vercel access; avoid this if you need network-level IP restrictions.
+Resend's published Free plan is $0/month and includes up to 3,000 transactional emails per month, limited to 100 per day. Check [Resend pricing](https://resend.com/pricing) for current limits. Verify the sender address/domain in Resend before sending tickets.
 
-After both projects are deployed, set each project's URL in the other's environment variable (`NEXT_PUBLIC_API_URL` on the frontend and `FRONTEND_ORIGINS` on the backend), then redeploy both. Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, and sign out. Admin sessions require HTTPS.
+After both services are deployed, set the Render service URL as the frontend's `NEXT_PUBLIC_API_URL` and the frontend URL as the backend's `FRONTEND_ORIGINS`, then redeploy both. Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, sign out, and test an event sign-up with Resend ticket delivery. Admin sessions require HTTPS.
 
 GitHub Actions runs lint and the production build on pushes and pull requests. The build also type-checks the backend.
 
