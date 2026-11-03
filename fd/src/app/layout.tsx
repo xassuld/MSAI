@@ -5,6 +5,10 @@ export const metadata: Metadata = {
   title: "Mongolian Students in Italy",
   description:
     "A little help from home for Mongolian students studying in Italy.",
+  icons: {
+    icon: "/msai-logo.png",
+    apple: "/msai-logo.png",
+  },
 };
 
 export const viewport: Viewport = {

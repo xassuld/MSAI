@@ -63,14 +63,7 @@ app.use(express.json({ limit: "16kb", type: "application/json" }));
 
 function originAllowed(request: Request): boolean {
   const origin = request.get("origin");
-
-  if (!origin) return false;
-
-  try {
-    return isAllowedOrigin(origin);
-  } catch {
-    return false;
-  }
+  return origin ? isAllowedOrigin(origin) : false;
 }
 
 function requireSameOrigin(request: Request, response: Response): boolean {
@@ -284,8 +277,7 @@ app.post("/api/admin/upload-signature", async (request, response, next) => {
   }
 });
 
-app.use(((error, _request, response, _next) => {
-  void _next;
+app.use(((error, _request, response, next) => {
   const status =
     typeof error === "object" &&
     error !== null &&
@@ -299,7 +291,10 @@ app.use(((error, _request, response, _next) => {
     error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
   );
 
-  if (response.headersSent) return;
+  if (response.headersSent) {
+    next(error);
+    return;
+  }
   response.status(status).json({
     error:
       status === 413

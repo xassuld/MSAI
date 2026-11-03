@@ -19,8 +19,6 @@ export const metadata: Metadata = {
     "Christmas gathering invitation for the Mongolian Students’ Association in Italy.",
 };
 
-export const dynamic = "force-dynamic";
-
 export default async function ChristmasPage() {
   const response = await fetch(`${backendApiUrl}/api/events/christmas`, {
     cache: "no-store",
