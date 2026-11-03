@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { backendApiUrl } from "./src/lib/backend-api";
 
 const nextConfig: NextConfig = {
   images: {
@@ -8,6 +9,14 @@ const nextConfig: NextConfig = {
         hostname: "res.cloudinary.com",
       },
     ],
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/api/admin/:path*",
+        destination: `${backendApiUrl}/api/admin/:path*`,
+      },
+    ];
   },
 };
 

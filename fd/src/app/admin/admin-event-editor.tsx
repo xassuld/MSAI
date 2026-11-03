@@ -2,7 +2,8 @@
 
 import Image from "next/image";
 import { useEffect, useState, type FormEvent } from "react";
-import { backendApiUrl } from "@/lib/backend-api";
+
+const adminApiUrl = "/api/admin";
 
 type EventFields = {
   title: string;
@@ -42,7 +43,7 @@ export default function AdminEventEditor() {
   useEffect(() => {
     let active = true;
 
-    fetch(`${backendApiUrl}/api/admin/events/christmas`, {
+    fetch(`${adminApiUrl}/events/christmas`, {
       cache: "no-store",
       credentials: "include",
     })
@@ -80,7 +81,7 @@ export default function AdminEventEditor() {
     setMessage("");
 
     try {
-      const response = await fetch(`${backendApiUrl}/api/admin/login`, {
+      const response = await fetch(`${adminApiUrl}/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -93,9 +94,9 @@ export default function AdminEventEditor() {
       }
 
       const eventResponse = await fetch(
-        `${backendApiUrl}/api/admin/events/christmas`,
+        `${adminApiUrl}/events/christmas`,
         {
-        cache: "no-store",
+          cache: "no-store",
           credentials: "include",
         },
       );
@@ -130,7 +131,7 @@ export default function AdminEventEditor() {
     setMessage("");
 
     try {
-      const signResponse = await fetch(`${backendApiUrl}/api/admin/upload-signature`, {
+      const signResponse = await fetch(`${adminApiUrl}/upload-signature`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -184,7 +185,7 @@ export default function AdminEventEditor() {
     setMessage("");
 
     try {
-      const response = await fetch(`${backendApiUrl}/api/admin/events/christmas`, {
+      const response = await fetch(`${adminApiUrl}/events/christmas`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -211,7 +212,7 @@ export default function AdminEventEditor() {
   async function handleLogout() {
     setBusy(true);
     try {
-      const response = await fetch(`${backendApiUrl}/api/admin/logout`, {
+      const response = await fetch(`${adminApiUrl}/logout`, {
         method: "POST",
         credentials: "include",
       });
