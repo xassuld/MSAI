@@ -9,12 +9,15 @@ import express, {
 import { getAllowedOrigins, validateEnvironment } from "./env.js";
 import {
   getChristmasEvent,
+  createOrUpdateAdmissionTicket,
+  getRegistrationRetryAfter,
   getLoginRetryAfter,
   recordFailedLogin,
   saveChristmasEvent,
   type EditableEvent,
 } from "./event-data.js";
 import { getAdminSession } from "./admin-session.js";
+import { sendAdmissionTicket } from "./ticket-email.js";
 
 validateEnvironment();
 
@@ -125,6 +128,74 @@ app.get("/api/events/christmas", async (_request, response, next) => {
   try {
     response.set("Cache-Control", "no-store");
     response.json(await getChristmasEvent());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/events/christmas/registrations", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  const name =
+    typeof request.body?.name === "string"
+      ? request.body.name.trim().replace(/\s+/g, " ")
+      : "";
+  const email =
+    typeof request.body?.email === "string"
+      ? request.body.email.trim().toLowerCase()
+      : "";
+
+  if (
+    !name ||
+    name.length > 120 ||
+    /[\u0000-\u001f\u007f]/.test(name) ||
+    email.length > 254 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+    request.body?.consent !== true
+  ) {
+    response.status(400).json({
+      error: "Enter a valid name and email, and agree to the ticket terms.",
+    });
+    return;
+  }
+
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+    response.status(503).json({
+      error: "Ticket email is not configured. Please contact the event organizers.",
+    });
+    return;
+  }
+
+  try {
+    const ipAddress = request.ip || request.socket.remoteAddress || "unknown";
+    const retryAfter = await getRegistrationRetryAfter(
+      createHash("sha256").update(ipAddress).digest("hex"),
+    );
+    if (retryAfter > 0) {
+      response
+        .set("Retry-After", String(retryAfter))
+        .status(429)
+        .json({ error: "Too many sign-up attempts. Try again later." });
+      return;
+    }
+
+    const ticket = await createOrUpdateAdmissionTicket(name, email);
+    const event = await getChristmasEvent();
+    try {
+      await sendAdmissionTicket(email, ticket.name, ticket.ticketCode, event);
+    } catch (error) {
+      console.error(
+        "Admission ticket email failed.",
+        error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
+      );
+      response.status(502).json({
+        error:
+          "Your sign-up was saved, but the ticket email could not be sent. Submit again to retry.",
+      });
+      return;
+    }
+
+    response.json({ ticketCode: ticket.ticketCode });
   } catch (error) {
     next(error);
   }

@@ -1,4 +1,5 @@
-import type { Collection } from "mongodb";
+import { randomBytes } from "node:crypto";
+import { ObjectId, type Collection } from "mongodb";
 import { mongoClient, mongoReady } from "./mongodb.js";
 
 export type EventData = {
@@ -14,6 +15,14 @@ export type EventData = {
 };
 
 export type EditableEvent = Omit<EventData, "_id" | "updatedAt">;
+
+export type AdmissionTicket = {
+  name: string;
+  email: string;
+  ticketCode: string;
+  createdAt: Date;
+  consentedAt: Date;
+};
 
 export const defaultChristmasEvent: EventData = {
   _id: "christmas",
@@ -109,4 +118,121 @@ export async function recordFailedLogin(ipAddress: string): Promise<void> {
     },
     { upsert: true },
   );
+}
+
+type RegistrationAttempt = {
+  _id: string;
+  attempts: number;
+  expiresAt: Date;
+};
+
+type StoredAdmissionTicket = AdmissionTicket & {
+  _id: ObjectId;
+};
+
+const registrationWindowMs = 15 * 60 * 1000;
+const maxRegistrationAttempts = 5;
+let registrationTtlIndex: Promise<string> | undefined;
+let ticketEmailIndex: Promise<string> | undefined;
+
+async function getRegistrationAttemptsCollection(): Promise<
+  Collection<RegistrationAttempt>
+> {
+  await mongoReady;
+  const collection =
+    mongoClient.db().collection<RegistrationAttempt>("event_registration_attempts");
+
+  registrationTtlIndex ??= collection.createIndex(
+    { expiresAt: 1 },
+    { expireAfterSeconds: 0 },
+  );
+  await registrationTtlIndex;
+
+  return collection;
+}
+
+export async function getRegistrationRetryAfter(
+  ipAddress: string,
+): Promise<number> {
+  const now = Date.now();
+  const windowStart = Math.floor(now / registrationWindowMs) * registrationWindowMs;
+  const windowEnd = windowStart + registrationWindowMs;
+  const id = `${ipAddress}:${windowStart}`;
+  const collection = await getRegistrationAttemptsCollection();
+
+  try {
+    await collection.updateOne(
+      { _id: id },
+      {
+        $inc: { attempts: 1 },
+        $setOnInsert: { expiresAt: new Date(windowEnd) },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== 11000
+    ) {
+      throw error;
+    }
+    await collection.updateOne({ _id: id }, { $inc: { attempts: 1 } });
+  }
+
+  const attempt = await collection.findOne({ _id: id });
+  return !attempt || attempt.attempts <= maxRegistrationAttempts
+    ? 0
+    : Math.max(1, Math.ceil((windowEnd - now) / 1000));
+}
+
+async function getAdmissionTicketsCollection(): Promise<
+  Collection<StoredAdmissionTicket>
+> {
+  await mongoReady;
+  const collection =
+    mongoClient.db().collection<StoredAdmissionTicket>("christmas_admission_tickets");
+
+  ticketEmailIndex ??= collection.createIndex({ email: 1 }, { unique: true });
+  await ticketEmailIndex;
+
+  return collection;
+}
+
+export async function createOrUpdateAdmissionTicket(
+  name: string,
+  email: string,
+): Promise<AdmissionTicket> {
+  const collection = await getAdmissionTicketsCollection();
+  const now = new Date();
+  const ticketCode = `MSAI-${randomBytes(6).toString("hex").toUpperCase()}`;
+
+  try {
+    await collection.updateOne(
+      { email },
+      {
+        $set: { name, consentedAt: now },
+        $setOnInsert: { ticketCode, createdAt: now },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== 11000
+    ) {
+      throw error;
+    }
+    await collection.updateOne({ email }, { $set: { name, consentedAt: now } });
+  }
+
+  const ticket = await collection.findOne({ email });
+  if (!ticket) {
+    throw new Error("The admission ticket could not be saved.");
+  }
+
+  return ticket;
 }

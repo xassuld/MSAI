@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { backendApiUrl } from "@/lib/backend-api";
+import RsvpForm from "./rsvp-form";
 
 type EventData = {
   title: string;
@@ -125,6 +126,8 @@ export default async function ChristmasPage() {
                 </p>
               )}
             </div>
+
+            <RsvpForm />
 
             <p className="mt-auto pt-10 text-[9px] font-medium uppercase tracking-[.16em] text-[#77786f]">
               Mongolia <span className="px-1 text-[#c59d50]">×</span> Italia
