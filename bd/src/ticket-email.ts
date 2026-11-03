@@ -1,4 +1,3 @@
-import nodemailer from "nodemailer";
 import type { EventData } from "./event-data.js";
 
 function escapeHtml(value: string): string {
@@ -20,19 +19,12 @@ export async function sendAdmissionTicket(
   ticketCode: string,
   event: EventData,
 ): Promise<void> {
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailAppPassword = process.env.GMAIL_APP_PASSWORD?.replace(/\s/g, "");
-  if (!gmailUser || !gmailAppPassword) {
-    throw new Error("GMAIL_USER and GMAIL_APP_PASSWORD must be configured.");
+  const apiKey = process.env.RESEND_API_KEY;
+  const from = process.env.RESEND_FROM_EMAIL;
+  if (!apiKey || !from) {
+    throw new Error("RESEND_API_KEY and RESEND_FROM_EMAIL must be configured.");
   }
 
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: { user: gmailUser, pass: gmailAppPassword },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 15_000,
-  });
   const date = event.date
     ? new Intl.DateTimeFormat("en", {
         dateStyle: "long",
@@ -48,10 +40,16 @@ export async function sendAdmissionTicket(
   const safeLocation = escapeHtml(location);
   const safeTicketCode = escapeHtml(ticketCode);
 
-  try {
-    await transporter.sendMail({
-      from: { name: "MSAI Events", address: gmailUser },
-      to: recipient,
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    signal: AbortSignal.timeout(15_000),
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from,
+      to: [recipient],
       subject: "Your admission ticket for the MSAI Christmas event",
       text: [
         `Hello ${attendeeName},`,
@@ -83,8 +81,13 @@ export async function sendAdmissionTicket(
     </main>
   </body>
 </html>`,
-    });
-  } finally {
-    transporter.close();
+    }),
+  });
+
+  if (!response.ok) {
+    const responseBody = await response.text();
+    throw new Error(
+      `Resend API request failed (${response.status}): ${responseBody.slice(0, 500)}`,
+    );
   }
 }
