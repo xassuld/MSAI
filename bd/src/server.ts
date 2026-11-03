@@ -1,8 +1,5 @@
 import { app } from "./app.js";
-import { validateEnvironment } from "./env.js";
 import { closeMongoDB, mongoReady } from "./mongodb.js";
-
-validateEnvironment();
 
 const port = Number(process.env.PORT ?? 4000);
 

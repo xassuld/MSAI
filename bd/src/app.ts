@@ -6,7 +6,7 @@ import express, {
   type Request,
   type Response,
 } from "express";
-import { getAllowedOrigins } from "./env.js";
+import { getAllowedOrigins, validateEnvironment } from "./env.js";
 import {
   getChristmasEvent,
   getLoginRetryAfter,
@@ -15,6 +15,8 @@ import {
   type EditableEvent,
 } from "./event-data.js";
 import { getAdminSession } from "./admin-session.js";
+
+validateEnvironment();
 
 const allowedOrigins = getAllowedOrigins();
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -304,3 +306,5 @@ app.use(((error, _request, response, next) => {
           : "The request could not be processed.",
   });
 }) satisfies ErrorRequestHandler);
+
+export default app;

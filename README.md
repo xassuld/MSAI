@@ -17,36 +17,29 @@ The backend defaults to port `4000` and allows the local frontend origins on por
 
 ## Production
 
-Deploy the frontend and backend as separate services:
+Deploy the frontend and backend as separate Vercel projects from the same GitHub repository:
 
-### Vercel frontend
+### Frontend project
 
-1. Import the repository as a monorepo project and set the project root to `fd/`. Enable **Include source files outside of the Root Directory in the Build Step** so Vercel can access the root npm workspace and lockfile.
-2. Set `NEXT_PUBLIC_API_URL` to the Render backend's public HTTPS URL in the Vercel **Production** environment. This variable is embedded at build time, so redeploy after changing it.
-3. Add the final frontend domain to the Vercel project after choosing it.
+Set the project root to `fd/` and use the Next.js preset. Set `NEXT_PUBLIC_API_URL` to the backend project's public HTTPS URL in the Vercel **Production** environment. This variable is embedded at build time, so redeploy after changing it.
 
-### Render backend
+### Backend project
 
-Create a Node web service from the repository root with:
+Import the same repository as another Vercel project and set the project root to `bd/`. Vercel detects the Express app. Set these environment variables in the backend project's Vercel settings:
 
-- Build command: `npm ci && npm run build --workspace=bd`
-- Start command: `npm run start --workspace=bd`
-- Health check path: `/api/health`
-
-Set these variables in the Render dashboard; keep secrets out of the frontend:
-
-- `NODE_ENV=production`
-- `FRONTEND_ORIGINS` — the exact frontend HTTPS origin, with no trailing slash
 - `MONGODB_URI`
 - `CLOUDINARY_CLOUD_NAME`
 - `CLOUDINARY_API_KEY`
 - `CLOUDINARY_API_SECRET`
 - `ADMIN_PASSWORD`
 - `ADMIN_SESSION_SECRET` — at least 32 characters
+- `FRONTEND_ORIGINS` — the exact frontend HTTPS origin, with no trailing slash
 
-Let Render provide `PORT`. In MongoDB Atlas, allow the Render service's outbound IP ranges (shown in its **Connect → Outbound** panel), not just your development computer's IP. Use the narrowest available ranges; Render also offers dedicated outbound IPs.
+Keep backend secrets only in the backend project, never in the frontend project. Vercel sets `NODE_ENV` for production automatically.
 
-After both services are deployed, verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, and sign out. Admin sessions require HTTPS.
+Vercel functions use dynamic outbound IPs by default. To keep MongoDB Atlas IP access restricted, use Vercel Static IPs (Pro or Enterprise) and allowlist those addresses. Otherwise, Atlas requires a broad `0.0.0.0/0` rule for Vercel access; avoid this if you need network-level IP restrictions.
+
+After both projects are deployed, set each project's URL in the other's environment variable (`NEXT_PUBLIC_API_URL` on the frontend and `FRONTEND_ORIGINS` on the backend), then redeploy both. Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, and sign out. Admin sessions require HTTPS.
 
 GitHub Actions runs lint and the production build on pushes and pull requests. The build also type-checks the backend.
 
