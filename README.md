@@ -56,3 +56,4 @@ Useful root scripts:
 - `npm run build` — build the frontend and type-check the backend.
 - `npm run lint` — lint both projects.
 - `npm run typecheck` — type-check both projects.
+# MSAI
