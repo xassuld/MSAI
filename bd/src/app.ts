@@ -10,8 +10,12 @@ import { getAllowedOrigins, validateEnvironment } from "./env.js";
 import {
   getChristmasEvent,
   createOrUpdateAdmissionTicket,
+  getSentAdmissionTicketCount,
+  getSentAdmissionTickets,
   getRegistrationRetryAfter,
   getLoginRetryAfter,
+  clearAdmissionTickets,
+  markAdmissionTicketEmailSent,
   recordFailedLogin,
   saveChristmasEvent,
   type EditableEvent,
@@ -200,6 +204,7 @@ app.post("/api/events/christmas/registrations", async (request, response, next) 
       return;
     }
 
+    await markAdmissionTicketEmailSent(email);
     response.json({ ticketCode: ticket.ticketCode });
   } catch (error) {
     next(error);
@@ -274,6 +279,59 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
 
     response.set("Cache-Control", "no-store");
     response.json(await getChristmasEvent());
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/tickets/stats", async (request, response, next) => {
+  try {
+    const session = await getAdminSession(request, response);
+    if (!session.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    response.set("Cache-Control", "no-store");
+    response.json({ sentTicketCount: await getSentAdmissionTicketCount() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/admin/tickets", async (request, response, next) => {
+  try {
+    const session = await getAdminSession(request, response);
+    if (!session.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const sentTickets = await getSentAdmissionTickets();
+    response.set("Cache-Control", "no-store");
+    response.json({
+      sentTickets: sentTickets.map((ticket) => ({
+        ...ticket,
+        emailSentAt: ticket.emailSentAt.toISOString(),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/tickets", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const session = await getAdminSession(request, response);
+    if (!session.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    response.set("Cache-Control", "no-store");
+    response.json({ deletedCount: await clearAdmissionTickets() });
   } catch (error) {
     next(error);
   }

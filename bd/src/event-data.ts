@@ -22,6 +22,14 @@ export type AdmissionTicket = {
   ticketCode: string;
   createdAt: Date;
   consentedAt: Date;
+  emailSentAt?: Date;
+};
+
+export type SentAdmissionTicket = Pick<
+  AdmissionTicket,
+  "name" | "email" | "emailSentAt"
+> & {
+  emailSentAt: Date;
 };
 
 export const defaultChristmasEvent: EventData = {
@@ -235,4 +243,46 @@ export async function createOrUpdateAdmissionTicket(
   }
 
   return ticket;
+}
+
+export async function markAdmissionTicketEmailSent(email: string): Promise<void> {
+  const collection = await getAdmissionTicketsCollection();
+  const result = await collection.updateOne(
+    { email },
+    { $set: { emailSentAt: new Date() } },
+  );
+
+  if (result.matchedCount !== 1) {
+    throw new Error("The sent admission ticket could not be recorded.");
+  }
+}
+
+export async function getSentAdmissionTicketCount(): Promise<number> {
+  const collection = await getAdmissionTicketsCollection();
+  const sentEmails = await collection.distinct("email", {
+    emailSentAt: { $type: "date" },
+  });
+  return sentEmails.length;
+}
+
+export async function getSentAdmissionTickets(): Promise<
+  SentAdmissionTicket[]
+> {
+  const collection = await getAdmissionTicketsCollection();
+  return collection
+    .find({ emailSentAt: { $type: "date" } })
+    .sort({ emailSentAt: -1 })
+    .project<SentAdmissionTicket>({
+      _id: 0,
+      name: 1,
+      email: 1,
+      emailSentAt: 1,
+    })
+    .toArray();
+}
+
+export async function clearAdmissionTickets(): Promise<number> {
+  const collection = await getAdmissionTicketsCollection();
+  const result = await collection.deleteMany({});
+  return result.deletedCount;
 }

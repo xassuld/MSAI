@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 
 const adminApiUrl = "/api/admin";
@@ -35,6 +36,11 @@ export default function AdminEventEditor() {
   const [checkingSession, setCheckingSession] = useState(true);
   const [password, setPassword] = useState("");
   const [event, setEvent] = useState<EventFields>(initialEvent);
+  const [sentTicketCount, setSentTicketCount] = useState<number | null>(null);
+  const [ticketCountError, setTicketCountError] = useState("");
+  const [confirmClearTickets, setConfirmClearTickets] = useState(false);
+  const [clearingTickets, setClearingTickets] = useState(false);
+  const [clearTicketsMessage, setClearTicketsMessage] = useState("");
   const [selectedPoster, setSelectedPoster] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -75,6 +81,43 @@ export default function AdminEventEditor() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!authenticated) return;
+
+    let active = true;
+
+    fetch(`${adminApiUrl}/tickets/stats`, {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then(async (response) => {
+        const data = (await response.json()) as {
+          error?: string;
+          sentTicketCount?: number;
+        };
+        if (!response.ok || typeof data.sentTicketCount !== "number") {
+          throw new Error(data.error ?? "Could not load the sent ticket count.");
+        }
+        if (active) {
+          setSentTicketCount(data.sentTicketCount);
+          setTicketCountError("");
+        }
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setTicketCountError(
+            error instanceof Error
+              ? error.message
+              : "Could not load the sent ticket count.",
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [authenticated]);
+
   async function handleLogin(formEvent: FormEvent<HTMLFormElement>) {
     formEvent.preventDefault();
     setBusy(true);
@@ -113,6 +156,39 @@ export default function AdminEventEditor() {
       setMessageIsError(true);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleClearTickets() {
+    setClearingTickets(true);
+    setClearTicketsMessage("");
+    try {
+      const response = await fetch(`${adminApiUrl}/tickets`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        deletedCount?: number;
+      };
+      if (!response.ok || typeof result.deletedCount !== "number") {
+        throw new Error(result.error ?? "Could not clear the ticket records.");
+      }
+
+      setSentTicketCount(0);
+      setTicketCountError("");
+      setConfirmClearTickets(false);
+      setClearTicketsMessage(
+        `${result.deletedCount} saved ticket ${
+          result.deletedCount === 1 ? "record was" : "records were"
+        } cleared.`,
+      );
+    } catch (error) {
+      setClearTicketsMessage(
+        error instanceof Error ? error.message : "Could not clear the ticket records.",
+      );
+    } finally {
+      setClearingTickets(false);
     }
   }
 
@@ -219,6 +295,8 @@ export default function AdminEventEditor() {
       if (!response.ok) throw new Error("Could not sign out. Please retry.");
       setAuthenticated(false);
       setEvent(initialEvent);
+      setSentTicketCount(null);
+      setTicketCountError("");
       setMessage("");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not sign out.");
@@ -288,7 +366,105 @@ export default function AdminEventEditor() {
             </button>
           </form>
         ) : (
-          <form className="grid gap-5" onSubmit={handleSave}>
+          <>
+            <section
+              aria-live="polite"
+              className="mb-6 rounded-2xl border border-[#24523c]/20 bg-[#dce5d6] px-5 py-4 text-[#24523c]"
+            >
+              <p className="text-[10px] font-bold uppercase tracking-[.16em]">
+                Tickets emailed
+              </p>
+              {sentTicketCount === null ? (
+                <p
+                  aria-live="polite"
+                  className="mt-1 text-sm"
+                  role={ticketCountError ? "alert" : "status"}
+                >
+                  {ticketCountError || "Loading sent ticket count…"}
+                </p>
+              ) : (
+                <p className="mt-1 text-2xl font-semibold tabular-nums">
+                  {sentTicketCount}{" "}
+                  <span className="text-sm font-medium">
+                    {sentTicketCount === 1 ? "ticket has" : "tickets have"} been
+                    emailed
+                  </span>
+                </p>
+              )}
+              <p className="mt-2 text-xs text-[#24523c]/75">
+                Counts successful ticket emails from when tracking was enabled;
+                earlier sends aren’t recorded.
+              </p>
+              <div className="mt-5 flex flex-wrap gap-3 border-t border-[#24523c]/15 pt-4">
+                <Link
+                  className="inline-flex items-center rounded-full border border-[#24523c]/30 px-4 py-2 text-xs font-semibold text-[#24523c] transition hover:bg-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#24523c]"
+                  href="/admin/tickets"
+                >
+                  View recipients
+                </Link>
+                <button
+                  className="inline-flex items-center rounded-full border border-[#923a35]/30 px-4 py-2 text-xs font-semibold text-[#923a35] transition hover:bg-[#f0ded6]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#923a35] disabled:opacity-50"
+                  disabled={clearingTickets}
+                  onClick={() => {
+                    setClearTicketsMessage("");
+                    setConfirmClearTickets(true);
+                  }}
+                  type="button"
+                >
+                  Clear all tickets
+                </button>
+              </div>
+              {confirmClearTickets && (
+                <div
+                  aria-labelledby="clear-tickets-title"
+                  className="mt-4 rounded-xl border border-[#923a35]/25 bg-[#f0ded6]/60 p-4 text-[#923a35]"
+                  role="group"
+                >
+                  <p className="text-sm font-semibold" id="clear-tickets-title">
+                    Permanently delete all saved ticket and recipient records?
+                  </p>
+                  <p className="mt-1 text-xs">
+                    This cannot be undone. New sign-ups can create records again.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      className="rounded-full bg-[#923a35] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                      disabled={clearingTickets}
+                      onClick={() => void handleClearTickets()}
+                      type="button"
+                    >
+                      {clearingTickets ? "Clearing…" : "Confirm clear all"}
+                    </button>
+                    <button
+                      className="rounded-full border border-[#923a35]/30 px-4 py-2 text-xs font-semibold disabled:opacity-50"
+                      disabled={clearingTickets}
+                      onClick={() => setConfirmClearTickets(false)}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+              {clearTicketsMessage && (
+                <p
+                  aria-live="polite"
+                  className={`mt-3 text-xs ${
+                    clearTicketsMessage.startsWith("Could not")
+                      ? "text-[#923a35]"
+                      : "text-[#24523c]"
+                  }`}
+                  role={
+                    clearTicketsMessage.startsWith("Could not")
+                      ? "alert"
+                      : "status"
+                  }
+                >
+                  {clearTicketsMessage}
+                </p>
+              )}
+            </section>
+            <form className="grid gap-5" onSubmit={handleSave}>
             <label className="grid text-sm font-semibold text-[#15294b]">
               Event title
               <input
@@ -421,7 +597,8 @@ export default function AdminEventEditor() {
             >
               Preview public event page
             </a>
-          </form>
+            </form>
+          </>
         )}
 
         {message && (
