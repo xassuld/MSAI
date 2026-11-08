@@ -189,7 +189,10 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
     }
 
     const event = await getChristmasEvent();
-    const qrCodeDataUrl = await QRCode.toDataURL(ticket.ticketCode, {
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
+    const ticketUrl = `${frontendUrl.replace(/\/+$/, "")}/tickets/${encodeURIComponent(ticket.ticketCode)}`;
+    const qrCodeDataUrl = await QRCode.toDataURL(ticketUrl, {
       errorCorrectionLevel: "M",
       margin: 2,
       width: 280,

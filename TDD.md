@@ -48,11 +48,11 @@ parsing. Stripe signature verification is required. On
    number, tier, amount, and Stripe identifiers.
 
 After commit, Gmail delivers the ticket and an embedded QR code containing the
-ticket code, displayed prominently in the admission pass. The public online
-ticket page also displays a QR code containing the same ticket code. Successful
-delivery sets `emailSentAt`. Failed email sends remain retryable through Stripe
-webhook delivery without creating a duplicate ticket. MongoDB transactions
-require Atlas or a replica set.
+public online ticket URL, displayed prominently in the admission pass. Scanning
+the QR code opens the ticket details page. The public online ticket page also
+displays this QR code. Successful delivery sets `emailSentAt`. Failed email
+sends remain retryable through Stripe webhook delivery without creating a
+duplicate ticket. MongoDB transactions require Atlas or a replica set.
 
 The ticket collection is `christmas_admission_tickets`. Email addresses are
 trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.

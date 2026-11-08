@@ -67,9 +67,12 @@ export async function sendAdmissionTicket(
   const ticketPrice = (amountPaidCents / 100).toFixed(2);
   const safeTicketType = escapeHtml(ticketType);
   const safePartyDescription = escapeHtml(event.partyDescription);
-  const eventUrl = "https://msai-eight.vercel.app/events/christmas";
-  const ticketUrl = `https://msai-eight.vercel.app/tickets/${encodeURIComponent(ticketCode)}`;
-  const qrCode = await QRCode.toBuffer(ticketCode, {
+  const frontendUrl = process.env.FRONTEND_URL;
+  if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
+  const baseUrl = frontendUrl.replace(/\/+$/, "");
+  const eventUrl = `${baseUrl}/events/christmas`;
+  const ticketUrl = `${baseUrl}/tickets/${encodeURIComponent(ticketCode)}`;
+  const qrCode = await QRCode.toBuffer(ticketUrl, {
     errorCorrectionLevel: "M",
     margin: 2,
     width: 280,
@@ -126,8 +129,8 @@ export async function sendAdmissionTicket(
             <p style="margin:14px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:1px">PRESENT THIS TICKET AT ENTRY</p>
           </td>
           <td width="52%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
-            <p style="margin:0 0 10px;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">SCAN AT ENTRY</p>
-            <img src="cid:event-signup-qr" alt="QR code for ticket ${safeTicketCode}" width="168" height="168" style="display:block;width:168px;height:168px;max-width:100%;margin:0 auto;padding:8px;box-sizing:border-box;background:#fff;border:1px solid #c7b995;border-radius:8px">
+            <p style="margin:0 0 10px;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">SCAN TO VIEW TICKET</p>
+            <img src="cid:event-signup-qr" alt="QR code to open the admission ticket for ${safeTicketCode}" width="168" height="168" style="display:block;width:168px;height:168px;max-width:100%;margin:0 auto;padding:8px;box-sizing:border-box;background:#fff;border:1px solid #c7b995;border-radius:8px">
             <p style="margin:8px 0 0;color:#535044;font-size:10px">Ticket code: ${safeTicketCode}</p>
           </td>
         </tr>

@@ -128,7 +128,8 @@ export default async function TicketPage({
                 Ticket number: {ticket.ticketNumber} · Payment confirmed
               </p>
               <p className="mt-3 text-xs leading-relaxed text-[#535044]">
-                This QR code contains your ticket code for admission scanning.
+                Scan this QR code to open this ticket and view its admission
+                details.
               </p>
             </div>
             <Image
