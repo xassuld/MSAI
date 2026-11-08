@@ -48,6 +48,17 @@ export async function ensureEventRegistrationState(event: EventData): Promise<vo
     },
     { upsert: true },
   );
+
+  const existingState = await EventModel.findById("christmas").select(
+    "totalRegistered",
+  );
+  if (existingState?.totalRegistered === undefined) {
+    const registeredCount = await TicketModel.countDocuments({});
+    await EventModel.updateOne(
+      { _id: "christmas", totalRegistered: { $exists: false } },
+      { $set: { totalRegistered: registeredCount } },
+    );
+  }
 }
 
 export async function registerAttendee(
