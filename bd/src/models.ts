@@ -1,4 +1,6 @@
-import { model, models, Schema, type InferSchemaType } from "mongoose";
+import mongoose, { type InferSchemaType } from "mongoose";
+
+const { model, models, Schema } = mongoose;
 
 const eventSchema = new Schema(
   {
