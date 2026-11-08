@@ -15,9 +15,6 @@ const requiredVariables = [
   "CLOUDINARY_API_SECRET",
   "ADMIN_PASSWORD",
   "ADMIN_SESSION_SECRET",
-  "STRIPE_SECRET_KEY",
-  "STRIPE_WEBHOOK_SECRET",
-  "FRONTEND_URL",
 ] as const;
 
 export function validateEnvironment(): void {

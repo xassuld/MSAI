@@ -17,7 +17,7 @@ type EventFields = {
   partyDescription: string;
   cashAtGateText: string;
   maxCapacity: number;
-  soldCount: number;
+  totalRegistered: number;
   ticketPricing: {
     earlyBird: { price: number; startsAt: string; endsAt: string };
     regular: { price: number; startsAt: string; endsAt: string };
@@ -35,8 +35,8 @@ const initialEvent: EventFields = {
   ticketInfo: "",
   partyDescription: "",
   cashAtGateText: "",
-  maxCapacity: 100,
-  soldCount: 0,
+  maxCapacity: 120,
+  totalRegistered: 0,
   ticketPricing: {
     earlyBird: { price: 0, startsAt: "", endsAt: "" },
     regular: { price: 0, startsAt: "", endsAt: "" },
@@ -579,12 +579,12 @@ export default function AdminEventEditor() {
             </label>
 
             <label className="grid text-sm font-semibold text-[#15294b]">
-              Payment notice
+              Cash-at-the-gate notice
               <textarea
                 className={`${fieldClass} min-h-20 resize-y`}
                 maxLength={500}
                 onChange={(event) => updateField("cashAtGateText", event.target.value)}
-                placeholder="Pay securely online by card at checkout."
+                placeholder="Your spot is reserved. Please bring exact cash to the gate."
                 rows={2}
                 value={event.cashAtGateText}
               />
@@ -604,19 +604,19 @@ export default function AdminEventEditor() {
                 />
               </label>
               <label className="grid text-sm font-semibold text-[#15294b]">
-                Paid tickets sold
+                Registered spots
                 <input
                   className={`${fieldClass} bg-[#e8dfcf]`}
                   disabled
                   type="number"
-                  value={event.soldCount}
+                  value={event.totalRegistered}
                 />
               </label>
             </div>
 
             <fieldset className="grid gap-4 rounded-2xl border border-[#c7b995] bg-[#fffdf8]/60 p-4">
               <legend className="px-1 text-sm font-semibold text-[#15294b]">
-                Calendar ticket prices (paid online)
+                Cash ticket prices by registration tier
               </legend>
               {(
                 [

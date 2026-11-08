@@ -19,6 +19,14 @@ type EventData = {
     regular: TicketTier;
     late: TicketTier;
   };
+  maxCapacity: number;
+  totalRegistered: number;
+  isSoldOut: boolean;
+  activeTier: {
+    key: keyof typeof ticketTierLabels;
+    price: number;
+    spotsRemaining: number;
+  } | null;
 };
 
 type TicketTier = {
@@ -32,17 +40,6 @@ const ticketTierLabels = {
   regular: "Regular",
   late: "Late",
 } as const;
-
-function getItalyDate(): string {
-  const parts = new Intl.DateTimeFormat("en", {
-    timeZone: "Europe/Rome",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date());
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-}
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("en", {
@@ -73,14 +70,13 @@ export default async function ChristmasPage() {
         timeZone: "UTC",
       }).format(new Date(`${event.date}T12:00:00Z`))
     : "";
-  const today = getItalyDate();
   const ticketTiers = Object.entries(event.ticketPricing) as [
     keyof typeof ticketTierLabels,
     TicketTier,
   ][];
-  const activeTicket = ticketTiers.find(
-    ([, tier]) => today >= tier.startsAt && today <= tier.endsAt,
-  );
+  const activeTicket = event.activeTier
+    ? ticketTiers.find(([tierName]) => tierName === event.activeTier?.key)
+    : undefined;
   const formatTierDate = (date: string) =>
     new Intl.DateTimeFormat("en", {
       dateStyle: "medium",
@@ -222,10 +218,15 @@ export default async function ChristmasPage() {
                     </div>
                   ))}
                 </div>
+                <p className="mt-3 text-xs font-semibold">
+                  {event.isSoldOut
+                    ? "Sold out — registration is closed."
+                    : `${event.activeTier ? `${ticketTierLabels[event.activeTier.key]} pricing` : "Registration"} · ${event.activeTier?.spotsRemaining ?? 0} spots remaining`}
+                </p>
               </div>
             </section>
 
-            <RsvpForm />
+            <RsvpForm soldOut={event.isSoldOut} />
 
             <p className="mt-auto pt-10 text-[9px] font-medium uppercase tracking-[.16em] text-[#77786f]">
               Mongolia <span className="px-1 text-[#c59d50]">×</span> Italia

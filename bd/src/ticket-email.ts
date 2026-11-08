@@ -29,7 +29,7 @@ export async function sendAdmissionTicket(
   ticketCode: string,
   ticketTier: TicketTierName,
   event: EventData,
-  amountPaidCents = event.ticketPricing[ticketTier].price * 100,
+  gatePrice = event.ticketPricing[ticketTier].price,
 ): Promise<void> {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
@@ -64,7 +64,7 @@ export async function sendAdmissionTicket(
     late: "Late",
   };
   const ticketType = tierLabels[ticketTier];
-  const ticketPrice = (amountPaidCents / 100).toFixed(2);
+  const ticketPrice = gatePrice.toFixed(2);
   const safeTicketType = escapeHtml(ticketType);
   const safePosterUrl = event.posterUrl ? escapeHtml(event.posterUrl) : "";
   const safePartyDescription = escapeHtml(event.partyDescription);
@@ -82,7 +82,8 @@ export async function sendAdmissionTicket(
     "",
     `Your admission ticket for ${event.title} is confirmed.`,
     `Ticket code: ${ticketCode}`,
-    `Ticket type: ${ticketType} (€${ticketPrice}, paid online by card)`,
+    `Ticket type: ${ticketType} (€${ticketPrice}, pay exact cash at the gate)`,
+    `Please bring exact cash: €${ticketPrice}. Your spot is reserved; payment is collected at the gate.`,
     `Date: ${date}`,
     `Time: ${time}`,
     `Location: ${location}`,
@@ -118,7 +119,7 @@ export async function sendAdmissionTicket(
             <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
             <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
             <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
-            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TICKET TYPE</strong><br>${safeTicketType} · €${ticketPrice} paid online</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TICKET TYPE</strong><br>${safeTicketType} · €${ticketPrice} cash at gate</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">DATE</strong><br>${safeDate}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TIME</strong><br>${safeTime}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>

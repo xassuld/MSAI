@@ -1,117 +1,105 @@
-import { DateTime } from "luxon";
 import mongoose from "mongoose";
 import { randomBytes } from "node:crypto";
-import Stripe from "stripe";
 import { mongooseReady } from "./mongoose.js";
 import { EventModel, TicketModel, type TicketDocument } from "./models.js";
-import type { EventData, TicketTierName } from "./event-data.js";
+import type { EventData } from "./event-data.js";
 
-export const ticketTiers = {
-  earlyBird: {
-    name: "Early Bird",
-    priceCents: 1800,
-    startsAt: "2026-11-09T00:00:00",
-    endsAt: "2026-11-15T23:59:59.999",
-  },
-  regular: {
-    name: "Regular",
-    priceCents: 2200,
-    startsAt: "2026-11-16T00:00:00",
-    endsAt: "2026-12-06T23:59:59.999",
-  },
-  late: {
-    name: "Late",
-    priceCents: 2700,
-    startsAt: "2026-12-07T00:00:00",
-    endsAt: "2026-12-13T23:59:59.999",
-  },
-} as const satisfies Record<
-  TicketTierName,
-  { name: string; priceCents: number; startsAt: string; endsAt: string }
->;
+export const registrationTiers = {
+  earlyBird: { name: "Early Bird", price: 18, end: 25 },
+  regular: { name: "Regular", price: 22, end: 75 },
+  late: { name: "Late", price: 26, end: 120 },
+} as const;
 
-export type ActiveTicketTier = (typeof ticketTiers)[TicketTierName] & {
-  key: TicketTierName;
+export type RegistrationTierName = keyof typeof registrationTiers;
+export type RegistrationResult = {
+  ticket: TicketDocument;
+  wasExisting: boolean;
 };
 
-export function isTicketTierName(value: string | undefined): value is TicketTierName {
-  return value !== undefined && value in ticketTiers;
-}
-
-export function resolveActiveTicketTier(
-  now = DateTime.now().setZone("Europe/Rome"),
-): ActiveTicketTier | null {
-  for (const key of Object.keys(ticketTiers) as TicketTierName[]) {
-    const tier = ticketTiers[key];
-    const startsAt = DateTime.fromISO(tier.startsAt, { zone: "Europe/Rome" });
-    const endsAt = DateTime.fromISO(tier.endsAt, { zone: "Europe/Rome" });
-    if (now >= startsAt && now <= endsAt) return { ...tier, key };
-  }
-  return null;
+export function resolveRegistrationTier(
+  registrationNumber: number,
+): { key: RegistrationTierName; name: string; price: number } {
+  const key =
+    registrationNumber <= registrationTiers.earlyBird.end
+      ? "earlyBird"
+      : registrationNumber <= registrationTiers.regular.end
+        ? "regular"
+        : "late";
+  return { key, ...registrationTiers[key] };
 }
 
 export function generateTicketCode(): string {
-  return randomBytes(6).toString("base64url").replace(/[-_]/g, "A").slice(0, 8).toUpperCase();
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  return Array.from(randomBytes(8), (byte) => alphabet[byte % alphabet.length]).join("");
 }
 
-export async function ensureEventCapacity(event: EventData): Promise<void> {
+export async function ensureEventRegistrationState(event: EventData): Promise<void> {
   await mongooseReady;
   await EventModel.updateOne(
     { _id: "christmas" },
     {
-      $set: { title: event.title, maxCapacity: event.maxCapacity },
-      $setOnInsert: { soldCount: event.soldCount },
+      $set: {
+        title: event.title,
+        maxCapacity: 120,
+        tierCaps: { earlyBird: 25, regular: 50, late: 45 },
+        cashAtGateText: event.cashAtGateText,
+      },
+      $setOnInsert: { totalRegistered: 0 },
     },
     { upsert: true },
   );
-  await EventModel.updateOne(
-    { _id: "christmas", soldCount: { $exists: false } },
-    { $set: { soldCount: event.soldCount } },
-  );
 }
 
-export async function reservePaidTicket(
+export async function registerAttendee(
   name: string,
   email: string,
-  tier: ActiveTicketTier,
-  session: Stripe.Checkout.Session,
-): Promise<TicketDocument> {
+  consentedAt = new Date(),
+): Promise<RegistrationResult | null> {
   await mongooseReady;
   const mongoSession = await mongoose.startSession();
   try {
-    let ticket!: TicketDocument;
+    let ticket: TicketDocument | null = null;
     await mongoSession.withTransaction(async () => {
       const event = await EventModel.findOneAndUpdate(
-        {
-          _id: "christmas",
-          $expr: { $lt: ["$soldCount", "$maxCapacity"] },
-        },
-        { $inc: { soldCount: 1 } },
+        { _id: "christmas", totalRegistered: { $lt: 120 } },
+        { $inc: { totalRegistered: 1 } },
         { new: true, session: mongoSession },
       );
-      if (!event) throw new Error("EVENT_CAPACITY_REACHED");
+      if (!event) return;
 
-      ticket = await TicketModel.create(
+      const registrationNumber = event.totalRegistered;
+      const tier = resolveRegistrationTier(registrationNumber);
+      [ticket] = await TicketModel.create(
         [
           {
             email,
             name,
             ticketCode: generateTicketCode(),
+            registrationNumber,
             ticketTier: tier.key,
-            amountPaidCents: tier.priceCents,
-            currency: "eur",
-            stripeSessionId: session.id,
-            stripePaymentIntentId:
-              typeof session.payment_intent === "string"
-                ? session.payment_intent
-                : "",
-            isPaid: true,
+            gatePrice: tier.price,
+            consentedAt,
           },
         ],
         { session: mongoSession },
-      ).then(([created]) => created!);
+      );
     });
-    return ticket;
+    return ticket ? { ticket, wasExisting: false } : null;
+  } catch (error) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === 11000 &&
+      "keyPattern" in error &&
+      typeof error.keyPattern === "object" &&
+      error.keyPattern !== null &&
+      "email" in error.keyPattern
+    ) {
+      const existingTicket = await TicketModel.findOne({ email });
+      return existingTicket ? { ticket: existingTicket, wasExisting: true } : null;
+    }
+    throw error;
   } finally {
     await mongoSession.endSession();
   }

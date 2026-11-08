@@ -20,22 +20,14 @@ import {
 } from "./event-data.js";
 import { getAdminSession } from "./admin-session.js";
 import { sendAdmissionTicket } from "./ticket-email.js";
-import Stripe from "stripe";
 import {
-  ensureEventCapacity,
-  isTicketTierName,
-  reservePaidTicket,
-  resolveActiveTicketTier,
-  ticketTiers,
+  ensureEventRegistrationState,
+  registerAttendee,
 } from "./ticketing.js";
 import { mongooseReady } from "./mongoose.js";
 import { EventModel, TicketModel } from "./models.js";
 
 validateEnvironment();
-
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
 
 const allowedOrigins = getAllowedOrigins();
 const allowedImageTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -83,100 +75,6 @@ app.use(
   }),
 );
 
-app.post(
-  "/api/webhooks/stripe",
-  express.raw({ type: "application/json" }),
-  async (request, response) => {
-    if (!stripe) {
-      response.status(503).json({ error: "Stripe is not configured." });
-      return;
-    }
-
-    let event: Stripe.Event;
-    try {
-      event = stripe.webhooks.constructEvent(
-        request.body as Buffer,
-        request.get("stripe-signature") ?? "",
-        process.env.STRIPE_WEBHOOK_SECRET!,
-      );
-    } catch (error) {
-      console.error(
-        "Stripe webhook signature verification failed.",
-        error instanceof Error ? error.message : "Unknown error",
-      );
-      response.status(400).json({ error: "Invalid Stripe webhook signature." });
-      return;
-    }
-
-    if (event.type !== "checkout.session.completed") {
-      response.json({ received: true });
-      return;
-    }
-
-    const checkoutSession = event.data.object as Stripe.Checkout.Session;
-    if (checkoutSession.payment_status !== "paid") {
-      response.json({ received: true });
-      return;
-    }
-
-    try {
-      await mongooseReady;
-      const metadata = checkoutSession.metadata ?? {};
-      const name = metadata.name?.trim();
-      const email = metadata.email?.trim().toLowerCase();
-      const tierKey = metadata.tier;
-      if (!name || !email || !isTicketTierName(tierKey)) {
-        throw new Error("Stripe checkout metadata is incomplete.");
-      }
-      const tier = ticketTiers[tierKey];
-
-      const existingTicket = await TicketModel.findOne({
-        stripeSessionId: checkoutSession.id,
-      });
-      const ticket =
-        existingTicket ??
-        (await reservePaidTicket(name, email, { ...tier, key: tierKey }, checkoutSession));
-      if (ticket.emailSentAt) {
-        response.json({ received: true });
-        return;
-      }
-
-      const eventData = await getChristmasEvent();
-      try {
-        await sendAdmissionTicket(
-          email,
-          name,
-          ticket.ticketCode,
-          tierKey,
-          eventData,
-          ticket.amountPaidCents,
-        );
-        await TicketModel.updateOne(
-          { _id: ticket.id },
-          { $set: { emailSentAt: new Date() } },
-        );
-      } catch (error) {
-        console.error(
-          "Paid admission ticket email failed.",
-          error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
-        );
-      }
-
-      response.json({ received: true });
-    } catch (error) {
-      if (error instanceof Error && error.message === "EVENT_CAPACITY_REACHED") {
-        response.status(409).json({ error: "The event is sold out." });
-        return;
-      }
-      console.error(
-        "Stripe webhook processing failed.",
-        error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
-      );
-      response.status(500).json({ error: "Could not process the paid ticket." });
-    }
-  },
-);
-
 app.use(express.json({ limit: "16kb", type: "application/json" }));
 
 function originAllowed(request: Request): boolean {
@@ -201,12 +99,7 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
     !(fields.title as string).trim() ||
     !ticketPricingAreValid(fields.ticketPricing) ||
     typeof fields.maxCapacity !== "number" ||
-    !Number.isInteger(fields.maxCapacity) ||
-    fields.maxCapacity < 1 ||
-    fields.maxCapacity > 100000 ||
-    typeof fields.soldCount !== "number" ||
-    !Number.isInteger(fields.soldCount) ||
-    fields.soldCount < 0
+    fields.maxCapacity !== 120
   ) {
     return false;
   }
@@ -245,7 +138,8 @@ function ticketPricingAreValid(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
 
   const tiers = value as Record<string, unknown>;
-  return ["earlyBird", "regular", "late"].every((name) => {
+  const prices = { earlyBird: 18, regular: 22, late: 26 } as const;
+  return (["earlyBird", "regular", "late"] as const).every((name) => {
     const tier = tiers[name];
     if (typeof tier !== "object" || tier === null) return false;
 
@@ -253,8 +147,7 @@ function ticketPricingAreValid(value: unknown): boolean {
     return (
       typeof fields.price === "number" &&
       Number.isFinite(fields.price) &&
-      fields.price >= 0 &&
-      fields.price <= 10000 &&
+      fields.price === prices[name] &&
       typeof fields.startsAt === "string" &&
       isValidDate(fields.startsAt) &&
       typeof fields.endsAt === "string" &&
@@ -277,13 +170,32 @@ app.get("/api/health", (_request, response) => {
 app.get("/api/events/christmas", async (_request, response, next) => {
   try {
     response.set("Cache-Control", "no-store");
-    response.json(await getChristmasEvent());
+    const event = await getChristmasEvent();
+    await ensureEventRegistrationState(event);
+    await mongooseReady;
+    const registrationState = await EventModel.findById("christmas").lean();
+    const totalRegistered = registrationState?.totalRegistered ?? 0;
+    const activeTier =
+      totalRegistered < 25
+        ? { key: "earlyBird", price: 18, spotsRemaining: 25 - totalRegistered }
+        : totalRegistered < 75
+          ? { key: "regular", price: 22, spotsRemaining: 75 - totalRegistered }
+          : totalRegistered < 120
+            ? { key: "late", price: 26, spotsRemaining: 120 - totalRegistered }
+            : null;
+    response.json({
+      ...event,
+      maxCapacity: 120,
+      totalRegistered,
+      isSoldOut: totalRegistered >= 120,
+      activeTier,
+    });
   } catch (error) {
     next(error);
   }
 });
 
-app.post("/api/events/christmas/checkout", async (request, response, next) => {
+app.post("/api/events/christmas/registrations", async (request, response, next) => {
   if (!requireSameOrigin(request, response)) return;
 
   const name =
@@ -309,11 +221,6 @@ app.post("/api/events/christmas/checkout", async (request, response, next) => {
     return;
   }
 
-  if (!stripe) {
-    response.status(503).json({ error: "Online ticket payments are not configured." });
-    return;
-  }
-
   try {
     const ipAddress = request.ip || request.socket.remoteAddress || "unknown";
     const retryAfter = await getRegistrationRetryAfter(
@@ -328,54 +235,98 @@ app.post("/api/events/christmas/checkout", async (request, response, next) => {
     }
 
     const event = await getChristmasEvent();
-    const activeTier = resolveActiveTicketTier();
-    if (!activeTier) {
-      response.status(400).json({ error: "Ticket sales are currently closed" });
-      return;
-    }
-
-    await ensureEventCapacity(event);
+    await ensureEventRegistrationState(event);
     await mongooseReady;
-    const capacity = await EventModel.findById("christmas").lean();
-    if (!capacity || capacity.soldCount >= capacity.maxCapacity) {
-      response.status(409).json({ error: "The event is sold out." });
+
+    const existingTicket = await TicketModel.findOne({ email });
+    if (existingTicket) {
+      await sendAdmissionTicket(
+        email,
+        existingTicket.name,
+        existingTicket.ticketCode,
+        existingTicket.ticketTier,
+        event,
+        existingTicket.gatePrice,
+      );
+      await TicketModel.updateOne(
+        { ticketCode: existingTicket.ticketCode },
+        { $set: { emailSentAt: new Date() } },
+      );
+      response.json({
+        message: "Registration email resent",
+        ticket: {
+          ticketCode: existingTicket.ticketCode,
+          registrationNumber: existingTicket.registrationNumber,
+          ticketTier: existingTicket.ticketTier,
+          gatePrice: existingTicket.gatePrice,
+        },
+      });
       return;
     }
 
-    const frontendUrl = process.env.FRONTEND_URL!.replace(/\/+$/, "");
-    const session = await stripe.checkout.sessions.create({
-      allowed_payment_method_types: ["card"],
-      line_items: [
-        {
-          price_data: {
-            currency: "eur",
-            unit_amount: activeTier.priceCents,
-            product_data: {
-              name: `MSAI Christmas Event Ticket (${activeTier.name})`,
-              description: "Admission ticket for MSAI Christmas Event",
-            },
-          },
-          quantity: 1,
-        },
-      ],
-      mode: "payment",
-      customer_email: email,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
-      metadata: {
-        name,
-        email,
-        tier: activeTier.key,
-        eventId: "christmas",
-      },
-      success_url: `${frontendUrl}/events/christmas/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${frontendUrl}/events/christmas`,
-    });
+    const registration = await registerAttendee(name, email);
+    if (!registration) {
+      response.status(409).json({
+        error: "Event is completely sold out (120/120 capacity reached).",
+      });
+      return;
+    }
+    const ticket = registration.ticket;
 
-    if (!session.url) {
-      throw new Error("Stripe did not return a checkout URL.");
+    if (registration.wasExisting) {
+      await sendAdmissionTicket(
+        email,
+        ticket.name,
+        ticket.ticketCode,
+        ticket.ticketTier,
+        event,
+        ticket.gatePrice,
+      );
+      await TicketModel.updateOne(
+        { ticketCode: ticket.ticketCode },
+        { $set: { emailSentAt: new Date() } },
+      );
+      response.status(200).json({
+        message: "Registration email resent",
+        ticket: {
+          ticketCode: ticket.ticketCode,
+          registrationNumber: ticket.registrationNumber,
+          ticketTier: ticket.ticketTier,
+          gatePrice: ticket.gatePrice,
+        },
+      });
+      return;
     }
 
-    response.json({ checkoutUrl: session.url });
+    try {
+      await sendAdmissionTicket(
+        email,
+        name,
+        ticket.ticketCode,
+        ticket.ticketTier,
+        event,
+        ticket.gatePrice,
+      );
+      await TicketModel.updateOne(
+        { ticketCode: ticket.ticketCode },
+        { $set: { emailSentAt: new Date() } },
+      );
+    } catch (error) {
+      console.error(
+        "Admission ticket email failed.",
+        error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
+      );
+    }
+
+    response.status(201).json({
+      message: "Registration confirmed",
+      ticket: {
+        ticketCode: ticket.ticketCode,
+        registrationNumber: ticket.registrationNumber,
+        ticketTier: ticket.ticketTier,
+        gatePrice: ticket.gatePrice,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -529,8 +480,8 @@ app.post("/api/admin/tickets/check-in", async (request, response, next) => {
 
     await mongooseReady;
     const ticket = await TicketModel.findOneAndUpdate(
-      { ticketCode, isPaid: true, isCheckedIn: false },
-      { $set: { isCheckedIn: true, checkedInAt: new Date() } },
+      { ticketCode, isCheckedIn: false },
+      { $set: { isCheckedIn: true, isPaid: true, checkedInAt: new Date() } },
       { new: true },
     );
     if (!ticket) {
@@ -549,6 +500,8 @@ app.post("/api/admin/tickets/check-in", async (request, response, next) => {
     response.json({
       name: ticket.name,
       ticketTier: ticket.ticketTier,
+      gatePrice: ticket.gatePrice,
+      message: `Entry approved. Collect €${ticket.gatePrice} cash.`,
       checkedInAt: ticket.checkedInAt,
     });
   } catch (error) {
@@ -573,6 +526,7 @@ app.put("/api/admin/events/christmas", async (request, response, next) => {
       return;
     }
 
+    const currentEvent = await getChristmasEvent();
     const fields: EditableEvent = {
       title: request.body.title,
       description: request.body.description,
@@ -584,12 +538,12 @@ app.put("/api/admin/events/christmas", async (request, response, next) => {
       partyDescription: request.body.partyDescription,
       cashAtGateText: request.body.cashAtGateText,
       ticketPricing: request.body.ticketPricing,
-      maxCapacity: request.body.maxCapacity,
-      soldCount: request.body.soldCount,
+      maxCapacity: 120,
+      totalRegistered: currentEvent.totalRegistered,
     };
 
     const savedEvent = await saveChristmasEvent(fields);
-    await ensureEventCapacity(savedEvent);
+    await ensureEventRegistrationState(savedEvent);
     response.json(savedEvent);
   } catch (error) {
     next(error);

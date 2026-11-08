@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { backendApiUrl } from "@/lib/backend-api";
 
-export default function RsvpForm() {
+export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
@@ -17,7 +17,7 @@ export default function RsvpForm() {
     const formData = new FormData(form);
     try {
       const response = await fetch(
-        `${backendApiUrl}/api/events/christmas/checkout`,
+        `${backendApiUrl}/api/events/christmas/registrations`,
         {
           method: "POST",
           signal: AbortSignal.timeout(30_000),
@@ -31,25 +31,28 @@ export default function RsvpForm() {
       );
       const result = (await response.json()) as {
         error?: string;
-        checkoutUrl?: string;
+        message?: string;
+        ticket?: { ticketCode?: string };
       };
 
-      if (!response.ok || !result.checkoutUrl) {
-        throw new Error(result.error ?? "Could not start checkout.");
+      if (!response.ok) {
+        throw new Error(result.error ?? "Could not complete registration.");
       }
 
-      if (!result.checkoutUrl) {
-        throw new Error("Could not start checkout.");
-      }
-
-      window.location.assign(result.checkoutUrl);
+      setIsError(false);
+      setMessage(
+        result.message === "Registration email resent"
+          ? "Your existing registration email was sent again."
+          : "Your spot is reserved. Check your email for the ticket and exact cash amount.",
+      );
+      form.reset();
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "TimeoutError"
           ? "The request timed out. Please try again."
           : error instanceof Error
           ? error.message
-          : "Could not start checkout. Please try again.",
+          : "Could not complete registration. Please try again.",
       );
       setIsError(true);
     } finally {
@@ -64,7 +67,9 @@ export default function RsvpForm() {
     <section className="mt-8 border-t border-[#b9aa8c]/70 pt-6">
       <h2 className="font-serif text-2xl text-[#15294b]">Sign up to attend</h2>
       <p className="mt-2 text-sm leading-relaxed text-[#62645f]">
-        Enter your details and we’ll email your admission ticket.
+        {soldOut
+          ? "All 120 spots have been reserved."
+          : "Enter your details and we’ll email your admission ticket."}
       </p>
       <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
         <label className="grid text-sm font-semibold text-[#15294b]">
@@ -102,10 +107,10 @@ export default function RsvpForm() {
         </label>
         <button
           className="rounded-xl bg-[#15294b] px-5 py-3.5 text-sm font-semibold text-[#f5efe3] transition hover:bg-[#263d75] disabled:opacity-50"
-          disabled={busy}
+          disabled={busy || soldOut}
           type="submit"
         >
-          {busy ? "Sending ticket…" : "Sign up"}
+          {soldOut ? "Sold out" : busy ? "Reserving your spot…" : "Reserve spot"}
         </button>
       </form>
       {message && (

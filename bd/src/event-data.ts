@@ -16,7 +16,7 @@ export type EventData = {
   cashAtGateText: string;
   ticketPricing: TicketPricing;
   maxCapacity: number;
-  soldCount: number;
+  totalRegistered: number;
   updatedAt?: Date;
 };
 
@@ -64,14 +64,14 @@ export const defaultChristmasEvent: EventData = {
     "We're preparing the official event ticket. The date, location, and ticket details will be shared here as soon as they're ready.",
   partyDescription:
     "Enjoy 2 cocktails and shared pizza. You are also welcome to bring a snack from outside.",
-  cashAtGateText: "Pay securely online by card at checkout.",
+  cashAtGateText: "Your spot is reserved. Please bring exact cash to the gate.",
   ticketPricing: {
-    earlyBird: { price: 17.5, startsAt: "2026-11-09", endsAt: "2026-11-15" },
-    regular: { price: 21.5, startsAt: "2026-11-16", endsAt: "2026-12-06" },
-    late: { price: 25, startsAt: "2026-12-07", endsAt: "2026-12-13" },
+    earlyBird: { price: 18, startsAt: "2026-11-09", endsAt: "2026-12-13" },
+    regular: { price: 22, startsAt: "2026-11-09", endsAt: "2026-12-13" },
+    late: { price: 26, startsAt: "2026-11-09", endsAt: "2026-12-13" },
   },
-  maxCapacity: 100,
-  soldCount: 0,
+  maxCapacity: 120,
+  totalRegistered: 0,
 };
 
 async function getEventCollection(): Promise<Collection<EventData>> {
@@ -228,7 +228,9 @@ export async function getRegistrationRetryAfter(
 
 export async function getSentAdmissionTicketCount(): Promise<number> {
   await mongooseReady;
-  const emails = await TicketModel.distinct("email", { isPaid: true });
+  const emails = await TicketModel.distinct("email", {
+    emailSentAt: { $exists: true },
+  });
   return emails.length;
 }
 
@@ -236,7 +238,7 @@ export async function getSentAdmissionTickets(): Promise<
   SentAdmissionTicket[]
 > {
   await mongooseReady;
-  return TicketModel.find({ isPaid: true })
+  return TicketModel.find({ emailSentAt: { $exists: true } })
     .sort({ emailSentAt: -1 })
     .select("name email ticketTier emailSentAt")
     .lean();
@@ -245,6 +247,6 @@ export async function getSentAdmissionTickets(): Promise<
 export async function clearAdmissionTickets(): Promise<number> {
   await mongooseReady;
   const result = await TicketModel.deleteMany({});
-  await EventModel.updateOne({ _id: "christmas" }, { $set: { soldCount: 0 } });
+  await EventModel.updateOne({ _id: "christmas" }, { $set: { totalRegistered: 0 } });
   return result.deletedCount;
 }
