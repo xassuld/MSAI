@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 const adminApiUrl = "/api/admin";
@@ -50,6 +51,7 @@ type CloudinaryUpload = {
 };
 
 export default function AdminEventEditor() {
+  const router = useRouter();
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [password, setPassword] = useState("");
@@ -316,6 +318,7 @@ export default function AdminEventEditor() {
       setSentTicketCount(null);
       setTicketCountError("");
       setMessage("");
+      router.push("/");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not sign out.");
       setMessageIsError(true);
