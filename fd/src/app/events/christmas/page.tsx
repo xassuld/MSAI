@@ -86,8 +86,8 @@ export default async function ChristmasPage() {
           <span className="flex-1 bg-[#cf4d4d]" />
         </div>
 
-        <div className="grid items-stretch md:grid-cols-[1fr_0.92fr]">
-          <section className="order-2 flex flex-col px-7 py-8 sm:px-12 sm:py-11 md:order-1 md:px-14 md:py-12">
+        <div className="grid items-stretch lg:grid-cols-[1fr_0.92fr]">
+          <section className="order-2 flex flex-col px-7 py-8 sm:px-12 sm:py-11 lg:order-1 lg:px-14 lg:py-12">
             <Link
               className="inline-flex w-fit items-center rounded-full border border-[#15294b]/20 px-4 py-2 text-[10px] font-semibold uppercase tracking-[.12em] text-[#15294b] transition hover:bg-[#e8dfd0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#15294b]"
               href="/"
@@ -98,7 +98,7 @@ export default async function ChristmasPage() {
               Back to MSAI
             </Link>
 
-            <div className="mt-12 md:mt-16">
+            <div className="mt-12 lg:mt-16">
               <p className="text-[9px] font-bold uppercase tracking-[.2em] text-[#80643a]">
                 Mongolian Students’ Association in Italy
               </p>
@@ -229,7 +229,7 @@ export default async function ChristmasPage() {
 
           <section
             aria-label="Event poster"
-            className="relative order-1 flex flex-col items-center justify-center overflow-hidden bg-[#e8dfcf] px-7 py-9 sm:px-12 md:order-2 md:px-10 md:py-12"
+            className="relative order-1 flex flex-col items-center justify-center overflow-hidden bg-[#e8dfcf] px-7 py-9 sm:px-12 lg:order-2 lg:px-10 lg:py-12"
           >
             <div
               aria-hidden="true"
