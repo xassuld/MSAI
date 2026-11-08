@@ -34,5 +34,6 @@ Keep the client secret and refresh token private and backend-only. Remove the ol
 Save the environment and deploy the commit that includes Gmail API support.
 
 The sender account must match the Gmail account used to grant consent. Verify
-ticket delivery with a sign-up and check the Render logs if the Gmail API returns
-an error.
+ticket delivery by completing a Stripe test checkout and confirming the
+`checkout.session.completed` webhook. Check the Render logs if the Gmail API
+returns an error.

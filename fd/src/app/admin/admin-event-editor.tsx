@@ -16,14 +16,8 @@ type EventFields = {
   posterUrl: string;
   ticketInfo: string;
   partyDescription: string;
-  cashAtGateText: string;
   maxCapacity: number;
-  totalRegistered: number;
-  ticketPricing: {
-    earlyBird: { price: number; startsAt: string; endsAt: string };
-    regular: { price: number; startsAt: string; endsAt: string };
-    late: { price: number; startsAt: string; endsAt: string };
-  };
+  soldCount: number;
 };
 
 const initialEvent: EventFields = {
@@ -35,14 +29,8 @@ const initialEvent: EventFields = {
   posterUrl: "",
   ticketInfo: "",
   partyDescription: "",
-  cashAtGateText: "",
   maxCapacity: 120,
-  totalRegistered: 0,
-  ticketPricing: {
-    earlyBird: { price: 0, startsAt: "", endsAt: "" },
-    regular: { price: 0, startsAt: "", endsAt: "" },
-    late: { price: 0, startsAt: "", endsAt: "" },
-  },
+  soldCount: 0,
 };
 
 type CloudinaryUpload = {
@@ -195,7 +183,6 @@ export default function AdminEventEditor() {
         throw new Error(result.error ?? "Could not clear the ticket records.");
       }
 
-      setSentTicketCount(0);
       setTicketCountError("");
       setConfirmClearTickets(false);
       setClearTicketsMessage(
@@ -331,23 +318,6 @@ export default function AdminEventEditor() {
     setEvent((current) => ({ ...current, [field]: value }));
   }
 
-  function updateTicketTier(
-    tier: keyof EventFields["ticketPricing"],
-    field: "price" | "startsAt" | "endsAt",
-    value: string,
-  ) {
-    setEvent((current) => ({
-      ...current,
-      ticketPricing: {
-        ...current.ticketPricing,
-        [tier]: {
-          ...current.ticketPricing[tier],
-          [field]: field === "price" ? Number(value) : value,
-        },
-      },
-    }));
-  }
-
   const fieldClass =
     "mt-1.5 w-full rounded-xl border border-[#c7b995] bg-[#fffdf8] px-3.5 py-3 text-sm text-[#15294b] outline-none transition focus:border-[#15294b] focus:ring-2 focus:ring-[#15294b]/15";
 
@@ -410,7 +380,7 @@ export default function AdminEventEditor() {
               className="mb-6 rounded-2xl border border-[#24523c]/20 bg-[#dce5d6] px-5 py-4 text-[#24523c]"
             >
               <p className="text-[10px] font-bold uppercase tracking-[.16em]">
-                Tickets emailed
+                Paid tickets emailed
               </p>
               {sentTicketCount === null ? (
                 <p
@@ -449,7 +419,7 @@ export default function AdminEventEditor() {
                   }}
                   type="button"
                 >
-                  Clear all tickets
+                  Clear unpaid legacy tickets
                 </button>
               </div>
               {confirmClearTickets && (
@@ -459,10 +429,10 @@ export default function AdminEventEditor() {
                   role="group"
                 >
                   <p className="text-sm font-semibold" id="clear-tickets-title">
-                    Permanently delete all saved ticket and recipient records?
+                    Delete legacy unpaid ticket records?
                   </p>
                   <p className="mt-1 text-xs">
-                    This cannot be undone. New sign-ups can create records again.
+                    Paid tickets and the sold count are retained. This cannot be undone.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <button
@@ -581,85 +551,34 @@ export default function AdminEventEditor() {
               />
             </label>
 
-            <label className="grid text-sm font-semibold text-[#15294b]">
-              Cash-at-the-gate notice
-              <textarea
-                className={`${fieldClass} min-h-20 resize-y`}
-                maxLength={500}
-                onChange={(event) => updateField("cashAtGateText", event.target.value)}
-                placeholder="Your spot is reserved. Please bring exact cash to the gate."
-                rows={2}
-                value={event.cashAtGateText}
-              />
-            </label>
-
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="grid text-sm font-semibold text-[#15294b]">
                 Maximum capacity
                 <input
-                  className={fieldClass}
-                  min="1"
-                  onChange={(event) =>
-                    updateField("maxCapacity", Number(event.target.value))
-                  }
+                  className={`${fieldClass} bg-[#e8dfcf]`}
+                  readOnly
                   type="number"
-                  value={event.maxCapacity}
+                  value={120}
                 />
               </label>
               <label className="grid text-sm font-semibold text-[#15294b]">
-                Registered spots
+                Paid tickets sold
                 <input
                   className={`${fieldClass} bg-[#e8dfcf]`}
                   disabled
                   type="number"
-                  value={event.totalRegistered}
+                  value={event.soldCount}
                 />
               </label>
             </div>
 
-            <fieldset className="grid gap-4 rounded-2xl border border-[#c7b995] bg-[#fffdf8]/60 p-4">
+            <fieldset className="grid gap-3 rounded-2xl border border-[#c7b995] bg-[#fffdf8]/60 p-4">
               <legend className="px-1 text-sm font-semibold text-[#15294b]">
-                Cash ticket prices by registration tier
+                Ticket pricing by tickets sold
               </legend>
-              {(
-                [
-                  ["earlyBird", "Early Bird"],
-                  ["regular", "Regular"],
-                  ["late", "Late"],
-                ] as const
-              ).map(([tier, label]) => (
-                <div className="grid gap-3 border-t border-[#c7b995]/60 pt-4 first:border-t-0 first:pt-0 sm:grid-cols-[1fr_1fr_1fr]" key={tier}>
-                  <label className="grid text-xs font-semibold text-[#15294b]">
-                    {label} price (€)
-                    <input
-                      className={fieldClass}
-                      min="0"
-                      onChange={(event) => updateTicketTier(tier, "price", event.target.value)}
-                      step="0.01"
-                      type="number"
-                      value={event.ticketPricing[tier].price}
-                    />
-                  </label>
-                  <label className="grid text-xs font-semibold text-[#15294b]">
-                    Starts
-                    <input
-                      className={fieldClass}
-                      onChange={(event) => updateTicketTier(tier, "startsAt", event.target.value)}
-                      type="date"
-                      value={event.ticketPricing[tier].startsAt}
-                    />
-                  </label>
-                  <label className="grid text-xs font-semibold text-[#15294b]">
-                    Ends
-                    <input
-                      className={fieldClass}
-                      onChange={(event) => updateTicketTier(tier, "endsAt", event.target.value)}
-                      type="date"
-                      value={event.ticketPricing[tier].endsAt}
-                    />
-                  </label>
-                </div>
-              ))}
+              <p className="text-sm text-[#15294b]">Tickets 1–25: Early Bird · €18</p>
+              <p className="text-sm text-[#15294b]">Tickets 26–75: Regular · €22</p>
+              <p className="text-sm text-[#15294b]">Tickets 76–120: Late · €26</p>
             </fieldset>
 
             <div className="grid gap-2 text-sm font-semibold text-[#15294b]">

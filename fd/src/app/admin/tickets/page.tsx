@@ -8,6 +8,7 @@ const adminApiUrl = "/api/admin";
 type SentTicketRecipient = {
   name: string;
   email: string;
+  ticketNumber: number;
   ticketTier: "earlyBird" | "regular" | "late" | null;
   emailSentAt: string;
 };
@@ -74,7 +75,7 @@ export default function AdminTicketsPage() {
         </p>
         <h1 className="mt-2 font-serif text-3xl">Ticket recipients</h1>
         <p className="mt-2 text-sm text-[#62645f]">
-          Each recipient is listed once, with the most recent successful email date.
+          Each paid ticket is listed with its successful email date.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
@@ -115,7 +116,7 @@ export default function AdminTicketsPage() {
                 </thead>
                 <tbody className="divide-y divide-[#c7b995]/60">
                   {tickets.map((ticket) => (
-                    <tr className="bg-[#fffdf8]/70" key={ticket.email}>
+                    <tr className="bg-[#fffdf8]/70" key={ticket.ticketNumber}>
                       <td className="px-4 py-3 font-semibold">{ticket.name}</td>
                       <td className="break-all px-4 py-3">{ticket.email}</td>
                       <td className="px-4 py-3">

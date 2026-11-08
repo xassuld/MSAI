@@ -1,7 +1,7 @@
 import { type Collection } from "mongodb";
 import { mongoClient, mongoReady } from "./mongodb.js";
 import { mongooseReady } from "./mongoose.js";
-import { EventModel, TicketModel } from "./models.js";
+import { ensureTicketIndexes, TicketModel } from "./models.js";
 
 export type EventData = {
   _id: "christmas";
@@ -13,28 +13,13 @@ export type EventData = {
   posterUrl: string;
   ticketInfo: string;
   partyDescription: string;
-  cashAtGateText: string;
-  ticketPricing: TicketPricing;
   maxCapacity: number;
   totalRegistered: number;
   updatedAt?: Date;
 };
 
 export type EditableEvent = Omit<EventData, "_id" | "updatedAt">;
-
-export type TicketTier = {
-  price: number;
-  startsAt: string;
-  endsAt: string;
-};
-
-export type TicketPricing = {
-  earlyBird: TicketTier;
-  regular: TicketTier;
-  late: TicketTier;
-};
-
-export type TicketTierName = keyof TicketPricing;
+export type TicketTierName = "earlyBird" | "regular" | "late";
 
 export type AdmissionTicket = {
   name: string;
@@ -48,6 +33,7 @@ export type SentAdmissionTicket = Pick<
   AdmissionTicket,
   "name" | "email" | "ticketTier" | "emailSentAt"
 > & {
+  ticketNumber: number;
   emailSentAt: Date;
 };
 
@@ -64,12 +50,6 @@ export const defaultChristmasEvent: EventData = {
     "We're preparing the official event ticket. The date, location, and ticket details will be shared here as soon as they're ready.",
   partyDescription:
     "Enjoy 2 cocktails and shared pizza. You are also welcome to bring a snack from outside.",
-  cashAtGateText: "Your spot is reserved. Please bring exact cash to the gate.",
-  ticketPricing: {
-    earlyBird: { price: 18, startsAt: "2026-11-09", endsAt: "2026-12-13" },
-    regular: { price: 22, startsAt: "2026-11-09", endsAt: "2026-12-13" },
-    late: { price: 26, startsAt: "2026-11-09", endsAt: "2026-12-13" },
-  },
   maxCapacity: 120,
   totalRegistered: 0,
 };
@@ -81,16 +61,12 @@ async function getEventCollection(): Promise<Collection<EventData>> {
 
 export async function getChristmasEvent(): Promise<EventData> {
   const collection = await getEventCollection();
-  const event = await collection.findOne({ _id: "christmas" });
+  const event = await collection.findOne(
+    { _id: "christmas" },
+    { projection: { cashAtGateText: 0, ticketPricing: 0 } },
+  );
 
-  const merged = event ? { ...defaultChristmasEvent, ...event } : defaultChristmasEvent;
-  if (
-    merged.cashAtGateText ===
-    "The ticket is free, but you pay at the gate. Cash only."
-  ) {
-    merged.cashAtGateText = defaultChristmasEvent.cashAtGateText;
-  }
-  return merged;
+  return event ? { ...defaultChristmasEvent, ...event } : defaultChristmasEvent;
 }
 
 export async function saveChristmasEvent(event: EditableEvent): Promise<EventData> {
@@ -228,25 +204,27 @@ export async function getRegistrationRetryAfter(
 
 export async function getSentAdmissionTicketCount(): Promise<number> {
   await mongooseReady;
-  const emails = await TicketModel.distinct("email", {
+  await ensureTicketIndexes();
+  return TicketModel.countDocuments({
+    isPaid: true,
     emailSentAt: { $exists: true },
   });
-  return emails.length;
 }
 
 export async function getSentAdmissionTickets(): Promise<
   SentAdmissionTicket[]
 > {
   await mongooseReady;
-  return TicketModel.find({ emailSentAt: { $exists: true } })
+  await ensureTicketIndexes();
+  return TicketModel.find({ isPaid: true, emailSentAt: { $exists: true } })
     .sort({ emailSentAt: -1 })
-    .select("name email ticketTier emailSentAt")
+    .select("name email ticketTier ticketNumber emailSentAt")
     .lean();
 }
 
-export async function clearAdmissionTickets(): Promise<number> {
+export async function clearUnpaidLegacyTickets(): Promise<number> {
   await mongooseReady;
-  const result = await TicketModel.deleteMany({});
-  await EventModel.updateOne({ _id: "christmas" }, { $set: { totalRegistered: 0 } });
+  await ensureTicketIndexes();
+  const result = await TicketModel.deleteMany({ isPaid: { $ne: true } });
   return result.deletedCount;
 }

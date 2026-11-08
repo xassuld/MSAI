@@ -11,19 +11,18 @@ import {
   getChristmasEvent,
   getSentAdmissionTicketCount,
   getSentAdmissionTickets,
-  getRegistrationRetryAfter,
   getLoginRetryAfter,
-  clearAdmissionTickets,
+  clearUnpaidLegacyTickets,
   recordFailedLogin,
   saveChristmasEvent,
   type EditableEvent,
 } from "./event-data.js";
 import { getAdminSession } from "./admin-session.js";
-import { sendAdmissionTicket } from "./ticket-email.js";
+import { ensureChristmasEventState } from "./ticketing.js";
 import {
-  ensureEventRegistrationState,
-  registerAttendee,
-} from "./ticketing.js";
+  createCheckoutSession,
+  handleStripeWebhook,
+} from "./ticketing-controller.js";
 import { mongooseReady } from "./mongoose.js";
 import { EventModel, TicketModel } from "./models.js";
 
@@ -41,7 +40,6 @@ const fieldLimits = {
   posterUrl: 1000,
   ticketInfo: 1000,
   partyDescription: 2000,
-  cashAtGateText: 500,
 } as const;
 
 function isAllowedOrigin(origin: string): boolean {
@@ -75,6 +73,12 @@ app.use(
   }),
 );
 
+app.post(
+  "/api/webhooks/stripe",
+  express.raw({ type: "application/json" }),
+  handleStripeWebhook,
+);
+
 app.use(express.json({ limit: "16kb", type: "application/json" }));
 
 function originAllowed(request: Request): boolean {
@@ -97,7 +101,6 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
       ([key, limit]) => typeof fields[key] === "string" && fields[key].length <= limit,
     ) ||
     !(fields.title as string).trim() ||
-    !ticketPricingAreValid(fields.ticketPricing) ||
     typeof fields.maxCapacity !== "number" ||
     fields.maxCapacity !== 120
   ) {
@@ -134,35 +137,6 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
   return true;
 }
 
-function ticketPricingAreValid(value: unknown): boolean {
-  if (typeof value !== "object" || value === null) return false;
-
-  const tiers = value as Record<string, unknown>;
-  const prices = { earlyBird: 18, regular: 22, late: 26 } as const;
-  return (["earlyBird", "regular", "late"] as const).every((name) => {
-    const tier = tiers[name];
-    if (typeof tier !== "object" || tier === null) return false;
-
-    const fields = tier as Record<string, unknown>;
-    return (
-      typeof fields.price === "number" &&
-      Number.isFinite(fields.price) &&
-      fields.price === prices[name] &&
-      typeof fields.startsAt === "string" &&
-      isValidDate(fields.startsAt) &&
-      typeof fields.endsAt === "string" &&
-      isValidDate(fields.endsAt) &&
-      fields.startsAt <= fields.endsAt
-    );
-  });
-}
-
-function isValidDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const parsedDate = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(parsedDate.getTime()) && parsedDate.toISOString().slice(0, 10) === value;
-}
-
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
@@ -171,23 +145,24 @@ app.get("/api/events/christmas", async (_request, response, next) => {
   try {
     response.set("Cache-Control", "no-store");
     const event = await getChristmasEvent();
-    await ensureEventRegistrationState(event);
+    await ensureChristmasEventState(event);
     await mongooseReady;
     const registrationState = await EventModel.findById("christmas").lean();
-    const totalRegistered = registrationState?.totalRegistered ?? 0;
+    const soldCount = registrationState?.soldCount ?? 0;
     const activeTier =
-      totalRegistered < 25
-        ? { key: "earlyBird", price: 18, spotsRemaining: 25 - totalRegistered }
-        : totalRegistered < 75
-          ? { key: "regular", price: 22, spotsRemaining: 75 - totalRegistered }
-          : totalRegistered < 120
-            ? { key: "late", price: 26, spotsRemaining: 120 - totalRegistered }
+      soldCount < 25
+        ? { name: "Early Bird", price: 18, remaining: 25 - soldCount }
+        : soldCount < 75
+          ? { name: "Regular", price: 22, remaining: 75 - soldCount }
+          : soldCount < 120
+            ? { name: "Late", price: 26, remaining: 120 - soldCount }
             : null;
     response.json({
       ...event,
       maxCapacity: 120,
-      totalRegistered,
-      isSoldOut: totalRegistered >= 120,
+      soldCount,
+      totalRegistered: soldCount,
+      isSoldOut: soldCount >= 120,
       activeTier,
     });
   } catch (error) {
@@ -204,7 +179,8 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
 
   try {
     await mongooseReady;
-    const ticket = await TicketModel.findOne({ ticketCode }).lean();
+    await ensureChristmasEventState(await getChristmasEvent());
+    const ticket = await TicketModel.findOne({ ticketCode, isPaid: true }).lean();
     if (!ticket) {
       response.status(404).json({ error: "Ticket not found." });
       return;
@@ -220,12 +196,12 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
         location: event.location,
         posterUrl: event.posterUrl,
         partyDescription: event.partyDescription,
-        cashAtGateText: event.cashAtGateText,
       },
       ticket: {
         code: ticket.ticketCode,
         tier: ticket.ticketTier,
-        gatePrice: ticket.gatePrice,
+        amountPaidCents: ticket.amountPaidCents,
+        ticketNumber: ticket.ticketNumber,
       },
     });
   } catch (error) {
@@ -233,141 +209,9 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
   }
 });
 
-app.post("/api/events/christmas/registrations", async (request, response, next) => {
+app.post("/api/events/christmas/checkout", async (request, response, next) => {
   if (!requireSameOrigin(request, response)) return;
-
-  const name =
-    typeof request.body?.name === "string"
-      ? request.body.name.trim().replace(/\s+/g, " ")
-      : "";
-  const email =
-    typeof request.body?.email === "string"
-      ? request.body.email.trim().toLowerCase()
-      : "";
-
-  if (
-    !name ||
-    name.length > 120 ||
-    /[\u0000-\u001f\u007f]/.test(name) ||
-    email.length > 254 ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-    request.body?.consent !== true
-  ) {
-    response.status(400).json({
-      error: "Enter a valid name and email, and agree to the ticket terms.",
-    });
-    return;
-  }
-
-  try {
-    const ipAddress = request.ip || request.socket.remoteAddress || "unknown";
-    const retryAfter = await getRegistrationRetryAfter(
-      createHash("sha256").update(ipAddress).digest("hex"),
-    );
-    if (retryAfter > 0) {
-      response
-        .set("Retry-After", String(retryAfter))
-        .status(429)
-        .json({ error: "Too many sign-up attempts. Try again later." });
-      return;
-    }
-
-    const event = await getChristmasEvent();
-    await ensureEventRegistrationState(event);
-    await mongooseReady;
-
-    const existingTicket = await TicketModel.findOne({ email });
-    if (existingTicket) {
-      await sendAdmissionTicket(
-        email,
-        existingTicket.name,
-        existingTicket.ticketCode,
-        existingTicket.ticketTier,
-        event,
-        existingTicket.gatePrice,
-      );
-      await TicketModel.updateOne(
-        { ticketCode: existingTicket.ticketCode },
-        { $set: { emailSentAt: new Date() } },
-      );
-      response.json({
-        message: "Registration email resent",
-        ticket: {
-          ticketCode: existingTicket.ticketCode,
-          registrationNumber: existingTicket.registrationNumber,
-          ticketTier: existingTicket.ticketTier,
-          gatePrice: existingTicket.gatePrice,
-        },
-      });
-      return;
-    }
-
-    const registration = await registerAttendee(name, email);
-    if (!registration) {
-      response.status(409).json({
-        error: "Event is completely sold out (120/120 capacity reached).",
-      });
-      return;
-    }
-    const ticket = registration.ticket;
-
-    if (registration.wasExisting) {
-      await sendAdmissionTicket(
-        email,
-        ticket.name,
-        ticket.ticketCode,
-        ticket.ticketTier,
-        event,
-        ticket.gatePrice,
-      );
-      await TicketModel.updateOne(
-        { ticketCode: ticket.ticketCode },
-        { $set: { emailSentAt: new Date() } },
-      );
-      response.status(200).json({
-        message: "Registration email resent",
-        ticket: {
-          ticketCode: ticket.ticketCode,
-          registrationNumber: ticket.registrationNumber,
-          ticketTier: ticket.ticketTier,
-          gatePrice: ticket.gatePrice,
-        },
-      });
-      return;
-    }
-
-    try {
-      await sendAdmissionTicket(
-        email,
-        name,
-        ticket.ticketCode,
-        ticket.ticketTier,
-        event,
-        ticket.gatePrice,
-      );
-      await TicketModel.updateOne(
-        { ticketCode: ticket.ticketCode },
-        { $set: { emailSentAt: new Date() } },
-      );
-    } catch (error) {
-      console.error(
-        "Admission ticket email failed.",
-        error instanceof Error ? `${error.name}: ${error.message}` : "Unknown error",
-      );
-    }
-
-    response.status(201).json({
-      message: "Registration confirmed",
-      ticket: {
-        ticketCode: ticket.ticketCode,
-        registrationNumber: ticket.registrationNumber,
-        ticketTier: ticket.ticketTier,
-        gatePrice: ticket.gatePrice,
-      },
-    });
-  } catch (error) {
-    next(error);
-  }
+  await createCheckoutSession(request, response, next);
 });
 
 app.post("/api/admin/login", async (request, response, next) => {
@@ -436,8 +280,17 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
       return;
     }
 
+    const event = await getChristmasEvent();
+    await ensureChristmasEventState(event);
+    const soldCount = (await EventModel.findById("christmas").select("soldCount").lean())
+      ?.soldCount ?? 0;
     response.set("Cache-Control", "no-store");
-    response.json(await getChristmasEvent());
+    response.json({
+      ...event,
+      maxCapacity: 120,
+      soldCount,
+      totalRegistered: soldCount,
+    });
   } catch (error) {
     next(error);
   }
@@ -472,6 +325,7 @@ app.get("/api/admin/tickets", async (request, response, next) => {
       sentTickets: sentTickets.map((ticket) => ({
         ...ticket,
         ticketTier: ticket.ticketTier ?? null,
+        ticketNumber: ticket.ticketNumber,
         emailSentAt: ticket.emailSentAt.toISOString(),
       })),
     });
@@ -491,7 +345,7 @@ app.delete("/api/admin/tickets", async (request, response, next) => {
     }
 
     response.set("Cache-Control", "no-store");
-    response.json({ deletedCount: await clearAdmissionTickets() });
+    response.json({ deletedCount: await clearUnpaidLegacyTickets() });
   } catch (error) {
     next(error);
   }
@@ -517,30 +371,32 @@ app.post("/api/admin/tickets/check-in", async (request, response, next) => {
     }
 
     await mongooseReady;
+    await ensureChristmasEventState(await getChristmasEvent());
     const ticket = await TicketModel.findOneAndUpdate(
-      { ticketCode, isCheckedIn: false },
-      { $set: { isCheckedIn: true, isPaid: true, checkedInAt: new Date() } },
+      { ticketCode, isPaid: true, isCheckedIn: false },
+      { $set: { isCheckedIn: true, checkedInAt: new Date() } },
       { new: true },
     );
     if (!ticket) {
       const existingTicket = await TicketModel.findOne({ ticketCode }).lean();
       if (existingTicket?.isPaid && existingTicket.isCheckedIn) {
         response.status(409).json({
-          error: "Already scanned",
+          error: "Ticket already scanned",
           checkedInAt: existingTicket.checkedInAt,
         });
       }
       else {
-        response.status(404).json({ error: "Paid ticket not found." });
+        response.status(existingTicket ? 400 : 404).json({
+          error: existingTicket ? "Ticket has not been paid." : "Ticket not found.",
+        });
       }
       return;
     }
     response.json({
       name: ticket.name,
-      ticketTier: ticket.ticketTier,
-      gatePrice: ticket.gatePrice,
-      message: `Entry approved. Collect €${ticket.gatePrice} cash.`,
-      checkedInAt: ticket.checkedInAt,
+      tier: ticket.ticketTier,
+      ticketNumber: ticket.ticketNumber,
+      message: "Entry authorized",
     });
   } catch (error) {
     next(error);
@@ -565,6 +421,9 @@ app.put("/api/admin/events/christmas", async (request, response, next) => {
     }
 
     const currentEvent = await getChristmasEvent();
+    await ensureChristmasEventState(currentEvent);
+    const soldCount = (await EventModel.findById("christmas").select("soldCount").lean())
+      ?.soldCount ?? 0;
     const fields: EditableEvent = {
       title: request.body.title,
       description: request.body.description,
@@ -574,15 +433,13 @@ app.put("/api/admin/events/christmas", async (request, response, next) => {
       posterUrl: request.body.posterUrl,
       ticketInfo: request.body.ticketInfo,
       partyDescription: request.body.partyDescription,
-      cashAtGateText: request.body.cashAtGateText,
-      ticketPricing: request.body.ticketPricing,
       maxCapacity: 120,
-      totalRegistered: currentEvent.totalRegistered,
+      totalRegistered: soldCount,
     };
 
     const savedEvent = await saveChristmasEvent(fields);
-    await ensureEventRegistrationState(savedEvent);
-    response.json(savedEvent);
+    await ensureChristmasEventState(savedEvent);
+    response.json({ ...savedEvent, soldCount });
   } catch (error) {
     next(error);
   }

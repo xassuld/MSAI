@@ -1,86 +1,81 @@
-# MSAI Christmas Event Technical Design
+# MSAI Christmas Event Ticketing Design
 
 ## Overview
 
-The Christmas event uses online RSVP reservations. No online payment is
-processed. Every reservation receives a unique ticket and the attendee pays
-the exact cash amount at the gate.
-
-## Architecture
+The Christmas event sells paid admission tickets through Stripe Checkout. A
+ticket is created and emailed only after Stripe confirms payment through a
+signature-verified webhook. MongoDB is authoritative for paid ticket count,
+capacity, ticket numbers, and check-in.
 
 ```text
-Next.js frontend -> Express backend -> MongoDB
-                                      -> Gmail API
-                                      -> Cloudinary
+Next.js frontend -> Express backend -> Stripe Checkout
+                                  -> MongoDB
+                                  -> Gmail API
+                                  -> Cloudinary
 ```
 
-The backend is authoritative for validation, capacity, ticket allocation, and
-check-in. MongoDB stores the event counters and admission tickets.
+## Capacity and pricing
 
-## Registration tiers
+The maximum capacity is 120 attendees. Pricing is determined by the sequential
+paid ticket number, not a calendar date:
 
-Registration order, not calendar time, determines the tier:
-
-| Registration numbers | Tier | Cash price |
+| Ticket numbers | Tier | Price |
 |---|---|---:|
 | 1-25 | Early Bird | €18 |
 | 26-75 | Regular | €22 |
 | 76-120 | Late | €26 |
 
-The venue capacity is 120. Registration beyond 120 returns HTTP 409.
+`events` stores the `christmas` event with `maxCapacity`, `soldCount`, and tier
+caps of 25, 50, and 45. `soldCount` increments only when a verified paid
+Checkout session is fulfilled. Checkout creation never reserves a ticket or
+increments the count. Attempts to start checkout when sold out return HTTP 409.
+If more paid sessions complete than remaining spots, the webhook transaction
+will reject the excess ticket and refund that payment.
 
-## Mongoose models
+## Ticket fulfillment
 
-The `events` document with `_id: "christmas"` contains `maxCapacity`,
-`totalRegistered`, `tierCaps`, and `cashAtGateText`. The
-`christmas_admission_tickets` document contains the normalized email, attendee
-name, unique eight-character ticket code, sequential registration number,
-tier, gate price, consent timestamp, email timestamp, payment status, and
-check-in fields.
+`POST /api/events/christmas/checkout` validates name, email, and consent,
+normalizes the email, selects the current price from `soldCount`, and returns a
+Stripe Checkout URL. It does not create a ticket.
 
-`totalRegistered` is allocated with an atomic `findOneAndUpdate` guarded by
-`totalRegistered < 120`. Ticket creation and the increment run in a MongoDB
-transaction, preventing duplicate registration numbers during concurrent
-requests.
+`POST /api/webhooks/stripe` is registered with `express.raw()` before JSON
+parsing. Stripe signature verification is required. On
+`checkout.session.completed`, a MongoDB transaction:
+
+1. Checks the unique Stripe session ID for an existing ticket.
+2. Atomically increments `soldCount` only when it is below 120.
+3. Creates a paid ticket with a unique eight-character code, sequential ticket
+   number, tier, amount, and Stripe identifiers.
+
+After commit, Gmail delivers the ticket and an embedded QR code containing the
+ticket code. Successful delivery sets `emailSentAt`. Failed email sends remain
+retryable through Stripe webhook delivery without creating a duplicate ticket.
+MongoDB transactions require Atlas or a replica set.
+
+The ticket collection is `christmas_admission_tickets`. Email addresses are
+trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.
+Existing non-payment registrations are not considered paid and cannot be used
+for entry. The backend drops a legacy unique email index when initializing the
+updated ticket indexes.
 
 ## API
 
-- `GET /api/events/christmas` returns event content plus `totalRegistered`,
-  `maxCapacity`, `isSoldOut`, and the active tier with spots remaining.
-- `POST /api/events/christmas/registrations` validates name, email, and
-  consent. Existing normalized emails receive their original ticket again
-  without consuming capacity. New attendees receive HTTP 201 and a Gmail
-  ticket containing a QR code and cash instructions.
-- `POST /api/admin/tickets/check-in` requires the existing admin session.
-  Ticket codes are atomically marked checked in and paid, and the response
-  tells volunteers which cash amount to collect. Repeated scans return HTTP
-  409.
-- `GET /api/admin/tickets` and `/api/admin/tickets/stats` expose authenticated
-  recipient reporting.
-- `DELETE /api/admin/tickets` clears tickets and resets the registration
-  counter after explicit admin confirmation.
+- `GET /api/events/christmas` returns event content, `maxCapacity`,
+  `soldCount`, `isSoldOut`, and the active tier's name, price, and remaining
+  quantity.
+- `POST /api/admin/tickets/check-in` requires the existing authenticated
+  iron-session, and atomically marks a verified paid ticket as checked in.
+  Repeat scans return HTTP 409.
+- Admin event editing, paid ticket reporting, and event poster upload remain
+  authenticated.
 
-## Public UX
+## Security and operations
 
-The event page displays the cash-at-the-gate notice, tier prices, live
-registration count, remaining spots, and sold-out state. The RSVP form remains
-on the site and reports whether a new reservation was made or an existing
-ticket email was resent.
-
-## Security
-
-- Admin routes use iron-session authentication and same-origin checks for
-  mutations.
-- Email addresses are normalized before lookup and storage.
-- Ticket codes use cryptographic randomness and are never generated from
-  attendee data.
-- Gmail, MongoDB, Cloudinary, and admin credentials remain backend-only.
-- Registration requests are rate limited by hashed client IP.
-
-## Operations and tests
-
-Set MongoDB, Gmail OAuth, Cloudinary, admin, and frontend-origin variables in
-Render. Verify `/api/health`, submit registrations for all three tier ranges,
-confirm duplicate email idempotency, test the 121st registration, and test
-successful and duplicate check-ins. MongoDB must support transactions through
-Atlas or a replica set.
+- Configure `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `FRONTEND_URL`
+  only in the backend environment. Set the Stripe webhook destination to
+  `/api/webhooks/stripe` and subscribe to `checkout.session.completed`.
+- Keep MongoDB, Gmail, Stripe, Cloudinary, and admin credentials backend-only.
+- Admin mutations require the existing same-origin check and iron-session.
+- Verify all three price bands, successful payment and email, webhook retries,
+  a duplicate scan, and the 121st paid checkout refund in a Stripe test
+  environment before launch.

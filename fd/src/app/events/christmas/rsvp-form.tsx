@@ -17,7 +17,7 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
     const formData = new FormData(form);
     try {
       const response = await fetch(
-        `${backendApiUrl}/api/events/christmas/registrations`,
+        `${backendApiUrl}/api/events/christmas/checkout`,
         {
           method: "POST",
           signal: AbortSignal.timeout(30_000),
@@ -31,28 +31,22 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
       );
       const result = (await response.json()) as {
         error?: string;
-        message?: string;
-        ticket?: { ticketCode?: string };
+        checkoutUrl?: string;
       };
 
       if (!response.ok) {
-        throw new Error(result.error ?? "Could not complete registration.");
+        throw new Error(result.error ?? "Could not start checkout.");
       }
+      if (!result.checkoutUrl) throw new Error("Checkout URL was not returned.");
 
-      setIsError(false);
-      setMessage(
-        result.message === "Registration email resent"
-          ? "Your existing registration email was sent again."
-          : "Your spot is reserved. Check your email for the ticket and exact cash amount.",
-      );
-      form.reset();
+      window.location.assign(result.checkoutUrl);
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "TimeoutError"
           ? "The request timed out. Please try again."
           : error instanceof Error
-          ? error.message
-          : "Could not complete registration. Please try again.",
+            ? error.message
+            : "Could not start checkout. Please try again.",
       );
       setIsError(true);
     } finally {
@@ -65,11 +59,11 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
 
   return (
     <section className="mt-8 border-t border-[#b9aa8c]/70 pt-6">
-      <h2 className="font-serif text-2xl text-[#15294b]">Sign up to attend</h2>
+      <h2 className="font-serif text-2xl text-[#15294b]">Buy an admission ticket</h2>
       <p className="mt-2 text-sm leading-relaxed text-[#62645f]">
         {soldOut
-          ? "All 120 spots have been reserved."
-          : "Enter your details and we’ll email your admission ticket."}
+          ? "All 120 tickets have been sold."
+          : "Enter your details to continue to secure card checkout. Your ticket is created only after payment succeeds."}
       </p>
       <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
         <label className="grid text-sm font-semibold text-[#15294b]">
@@ -101,8 +95,8 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
             type="checkbox"
           />
           <span>
-            I agree to provide my name and email so the organizers can manage
-            this event and send my admission ticket.
+            I agree to provide my name and email to process my ticket purchase
+            and receive my admission ticket.
           </span>
         </label>
         <button
@@ -110,7 +104,7 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
           disabled={busy || soldOut}
           type="submit"
         >
-          {soldOut ? "Sold out" : busy ? "Reserving your spot…" : "Reserve spot"}
+          {soldOut ? "Sold out" : busy ? "Opening checkout…" : "Continue to payment"}
         </button>
       </form>
       {message && (

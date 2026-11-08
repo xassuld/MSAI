@@ -12,12 +12,12 @@ type TicketData = {
     location: string;
     posterUrl: string;
     partyDescription: string;
-    cashAtGateText: string;
   };
   ticket: {
     code: string;
     tier: "earlyBird" | "regular" | "late";
-    gatePrice: number;
+    amountPaidCents: number;
+    ticketNumber: number;
   };
 };
 
@@ -78,7 +78,7 @@ export default async function TicketPage({
               {ticketType}
             </p>
             <p className="mt-3 text-sm text-[#d9e1eb]">
-              €{ticket.gatePrice.toFixed(2)} · Pay cash at the gate
+              €{(ticket.amountPaidCents / 100).toFixed(2)} paid
             </p>
           </div>
 
@@ -119,7 +119,9 @@ export default async function TicketPage({
 
           <div className="mt-8 rounded-xl border border-[#c7b995] bg-[#f3ecdf] px-4 py-3 text-sm">
             <p className="font-semibold">Ticket code: {ticket.code}</p>
-            <p className="mt-1 text-[#535044]">{event.cashAtGateText}</p>
+          <p className="mt-1 text-[#535044]">
+            Ticket number: {ticket.ticketNumber} · Payment confirmed
+          </p>
           </div>
           {event.partyDescription && (
             <p className="mt-5 text-sm leading-6 text-[#535044]">

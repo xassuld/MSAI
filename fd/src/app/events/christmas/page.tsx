@@ -13,33 +13,36 @@ type EventData = {
   posterUrl: string;
   ticketInfo: string;
   partyDescription: string;
-  cashAtGateText: string;
-  ticketPricing: {
-    earlyBird: TicketTier;
-    regular: TicketTier;
-    late: TicketTier;
-  };
   maxCapacity: number;
-  totalRegistered: number;
+  soldCount: number;
   isSoldOut: boolean;
   activeTier: {
-    key: keyof typeof ticketTierLabels;
+    name: string;
     price: number;
-    spotsRemaining: number;
+    remaining: number;
   } | null;
 };
 
-type TicketTier = {
-  price: number;
-  startsAt: string;
-  endsAt: string;
-};
-
-const ticketTierLabels = {
-  earlyBird: "Early Bird",
-  regular: "Regular",
-  late: "Late",
-} as const;
+const ticketTiers = [
+  {
+    key: "earlyBird",
+    name: "Early Bird",
+    price: 18,
+    ticketRange: "Tickets 1–25",
+  },
+  {
+    key: "regular",
+    name: "Regular",
+    price: 22,
+    ticketRange: "Tickets 26–75",
+  },
+  {
+    key: "late",
+    name: "Late",
+    price: 26,
+    ticketRange: "Tickets 76–120",
+  },
+] as const;
 
 function formatPrice(price: number): string {
   return new Intl.NumberFormat("en", {
@@ -70,18 +73,9 @@ export default async function ChristmasPage() {
         timeZone: "UTC",
       }).format(new Date(`${event.date}T12:00:00Z`))
     : "";
-  const ticketTiers = Object.entries(event.ticketPricing) as [
-    keyof typeof ticketTierLabels,
-    TicketTier,
-  ][];
-  const activeTicket = event.activeTier
-    ? ticketTiers.find(([tierName]) => tierName === event.activeTier?.key)
-    : undefined;
-  const formatTierDate = (date: string) =>
-    new Intl.DateTimeFormat("en", {
-      dateStyle: "medium",
-      timeZone: "UTC",
-    }).format(new Date(`${date}T12:00:00Z`));
+  const activeTicket = ticketTiers.find(
+    (tier) => tier.name === event.activeTier?.name,
+  );
 
   return (
     <main className="relative flex min-h-screen items-center justify-center px-5 py-12 max-[480px]:px-[14px] sm:py-16">
@@ -174,9 +168,9 @@ export default async function ChristmasPage() {
             </div>
 
             <section className="mt-7 grid gap-4">
-              <div className="rounded-2xl border-2 border-[#923a35]/35 bg-[#f0ded6] px-5 py-5 text-center text-[#923a35] shadow-[0_8px_20px_rgb(146_58_53/10%)]">
+              <div className="rounded-2xl border-2 border-[#24523c]/20 bg-[#dce5d6] px-5 py-5 text-center text-[#24523c] shadow-[0_8px_20px_rgb(36_82_60/10%)]">
                 <p className="text-[11px] font-black uppercase tracking-[.16em]">
-                  {event.cashAtGateText}
+                  Pay securely online — your ticket is issued after payment
                 </p>
               </div>
               {event.partyDescription && (
@@ -196,32 +190,32 @@ export default async function ChristmasPage() {
                   </p>
                   {activeTicket && (
                     <span className="rounded-full bg-[#24523c] px-3 py-1 text-[9px] font-bold uppercase tracking-[.1em] text-white">
-                      {ticketTierLabels[activeTicket[0]]} now
+                      {activeTicket.name} now
                     </span>
                   )}
                 </div>
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                  {ticketTiers.map(([tierName, tier]) => (
+                  {ticketTiers.map((tier) => (
                     <div
                       className={`rounded-xl border px-3 py-3 ${
-                        activeTicket?.[0] === tierName
+                        activeTicket?.key === tier.key
                           ? "border-[#24523c] bg-white/70"
                           : "border-[#24523c]/15 bg-white/35"
                       }`}
-                      key={tierName}
+                      key={tier.key}
                     >
-                      <p className="text-xs font-bold">{ticketTierLabels[tierName]}</p>
+                      <p className="text-xs font-bold">{tier.name}</p>
                       <p className="mt-1 text-xl font-semibold">{formatPrice(tier.price)}</p>
                       <p className="mt-1 text-[10px] leading-relaxed text-[#24523c]/75">
-                        {formatTierDate(tier.startsAt)} – {formatTierDate(tier.endsAt)}
+                        {tier.ticketRange}
                       </p>
                     </div>
                   ))}
                 </div>
                 <p className="mt-3 text-xs font-semibold">
                   {event.isSoldOut
-                    ? "Sold out — registration is closed."
-                    : `${event.activeTier ? `${ticketTierLabels[event.activeTier.key]} pricing` : "Registration"} · ${event.activeTier?.spotsRemaining ?? 0} spots remaining`}
+                    ? "Sold out — ticket sales are closed."
+                    : `${event.activeTier?.name ?? "Tickets"} · ${event.activeTier?.remaining ?? 0} tickets remaining`}
                 </p>
               </div>
             </section>
