@@ -1,6 +1,7 @@
-import { randomBytes } from "node:crypto";
-import { ObjectId, type Collection } from "mongodb";
+import { type Collection } from "mongodb";
 import { mongoClient, mongoReady } from "./mongodb.js";
+import { mongooseReady } from "./mongoose.js";
+import { EventModel, TicketModel } from "./models.js";
 
 export type EventData = {
   _id: "christmas";
@@ -11,23 +12,41 @@ export type EventData = {
   location: string;
   posterUrl: string;
   ticketInfo: string;
+  partyDescription: string;
+  cashAtGateText: string;
+  ticketPricing: TicketPricing;
+  maxCapacity: number;
+  soldCount: number;
   updatedAt?: Date;
 };
 
 export type EditableEvent = Omit<EventData, "_id" | "updatedAt">;
 
+export type TicketTier = {
+  price: number;
+  startsAt: string;
+  endsAt: string;
+};
+
+export type TicketPricing = {
+  earlyBird: TicketTier;
+  regular: TicketTier;
+  late: TicketTier;
+};
+
+export type TicketTierName = keyof TicketPricing;
+
 export type AdmissionTicket = {
   name: string;
   email: string;
-  ticketCode: string;
   createdAt: Date;
-  consentedAt: Date;
+  ticketTier?: TicketTierName;
   emailSentAt?: Date;
 };
 
 export type SentAdmissionTicket = Pick<
   AdmissionTicket,
-  "name" | "email" | "emailSentAt"
+  "name" | "email" | "ticketTier" | "emailSentAt"
 > & {
   emailSentAt: Date;
 };
@@ -43,6 +62,16 @@ export const defaultChristmasEvent: EventData = {
   posterUrl: "",
   ticketInfo:
     "We're preparing the official event ticket. The date, location, and ticket details will be shared here as soon as they're ready.",
+  partyDescription:
+    "Enjoy 2 cocktails and shared pizza. You are also welcome to bring a snack from outside.",
+  cashAtGateText: "Pay securely online by card at checkout.",
+  ticketPricing: {
+    earlyBird: { price: 17.5, startsAt: "2026-11-09", endsAt: "2026-11-15" },
+    regular: { price: 21.5, startsAt: "2026-11-16", endsAt: "2026-12-06" },
+    late: { price: 25, startsAt: "2026-12-07", endsAt: "2026-12-13" },
+  },
+  maxCapacity: 100,
+  soldCount: 0,
 };
 
 async function getEventCollection(): Promise<Collection<EventData>> {
@@ -54,7 +83,14 @@ export async function getChristmasEvent(): Promise<EventData> {
   const collection = await getEventCollection();
   const event = await collection.findOne({ _id: "christmas" });
 
-  return event ? { ...defaultChristmasEvent, ...event } : defaultChristmasEvent;
+  const merged = event ? { ...defaultChristmasEvent, ...event } : defaultChristmasEvent;
+  if (
+    merged.cashAtGateText ===
+    "The ticket is free, but you pay at the gate. Cash only."
+  ) {
+    merged.cashAtGateText = defaultChristmasEvent.cashAtGateText;
+  }
+  return merged;
 }
 
 export async function saveChristmasEvent(event: EditableEvent): Promise<EventData> {
@@ -134,14 +170,9 @@ type RegistrationAttempt = {
   expiresAt: Date;
 };
 
-type StoredAdmissionTicket = AdmissionTicket & {
-  _id: ObjectId;
-};
-
 const registrationWindowMs = 15 * 60 * 1000;
 const maxRegistrationAttempts = 5;
 let registrationTtlIndex: Promise<string> | undefined;
-let ticketEmailIndex: Promise<string> | undefined;
 
 async function getRegistrationAttemptsCollection(): Promise<
   Collection<RegistrationAttempt>
@@ -195,94 +226,25 @@ export async function getRegistrationRetryAfter(
     : Math.max(1, Math.ceil((windowEnd - now) / 1000));
 }
 
-async function getAdmissionTicketsCollection(): Promise<
-  Collection<StoredAdmissionTicket>
-> {
-  await mongoReady;
-  const collection =
-    mongoClient.db().collection<StoredAdmissionTicket>("christmas_admission_tickets");
-
-  ticketEmailIndex ??= collection.createIndex({ email: 1 }, { unique: true });
-  await ticketEmailIndex;
-
-  return collection;
-}
-
-export async function createOrUpdateAdmissionTicket(
-  name: string,
-  email: string,
-): Promise<AdmissionTicket> {
-  const collection = await getAdmissionTicketsCollection();
-  const now = new Date();
-  const ticketCode = `MSAI-${randomBytes(6).toString("hex").toUpperCase()}`;
-
-  try {
-    await collection.updateOne(
-      { email },
-      {
-        $set: { name, consentedAt: now },
-        $setOnInsert: { ticketCode, createdAt: now },
-      },
-      { upsert: true },
-    );
-  } catch (error) {
-    if (
-      typeof error !== "object" ||
-      error === null ||
-      !("code" in error) ||
-      error.code !== 11000
-    ) {
-      throw error;
-    }
-    await collection.updateOne({ email }, { $set: { name, consentedAt: now } });
-  }
-
-  const ticket = await collection.findOne({ email });
-  if (!ticket) {
-    throw new Error("The admission ticket could not be saved.");
-  }
-
-  return ticket;
-}
-
-export async function markAdmissionTicketEmailSent(email: string): Promise<void> {
-  const collection = await getAdmissionTicketsCollection();
-  const result = await collection.updateOne(
-    { email },
-    { $set: { emailSentAt: new Date() } },
-  );
-
-  if (result.matchedCount !== 1) {
-    throw new Error("The sent admission ticket could not be recorded.");
-  }
-}
-
 export async function getSentAdmissionTicketCount(): Promise<number> {
-  const collection = await getAdmissionTicketsCollection();
-  const sentEmails = await collection.distinct("email", {
-    emailSentAt: { $type: "date" },
-  });
-  return sentEmails.length;
+  await mongooseReady;
+  const emails = await TicketModel.distinct("email", { isPaid: true });
+  return emails.length;
 }
 
 export async function getSentAdmissionTickets(): Promise<
   SentAdmissionTicket[]
 > {
-  const collection = await getAdmissionTicketsCollection();
-  return collection
-    .find({ emailSentAt: { $type: "date" } })
+  await mongooseReady;
+  return TicketModel.find({ isPaid: true })
     .sort({ emailSentAt: -1 })
-    .project<SentAdmissionTicket>({
-      _id: 0,
-      name: 1,
-      email: 1,
-      emailSentAt: 1,
-    })
-    .toArray();
+    .select("name email ticketTier emailSentAt")
+    .lean();
 }
 
 export async function clearAdmissionTickets(): Promise<number> {
-  const collection = await getAdmissionTicketsCollection();
-  const result = await collection.deleteMany({});
+  await mongooseReady;
+  const result = await TicketModel.deleteMany({});
+  await EventModel.updateOne({ _id: "christmas" }, { $set: { soldCount: 0 } });
   return result.deletedCount;
 }

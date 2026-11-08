@@ -12,7 +12,44 @@ type EventData = {
   location: string;
   posterUrl: string;
   ticketInfo: string;
+  partyDescription: string;
+  cashAtGateText: string;
+  ticketPricing: {
+    earlyBird: TicketTier;
+    regular: TicketTier;
+    late: TicketTier;
+  };
 };
+
+type TicketTier = {
+  price: number;
+  startsAt: string;
+  endsAt: string;
+};
+
+const ticketTierLabels = {
+  earlyBird: "Early Bird",
+  regular: "Regular",
+  late: "Late",
+} as const;
+
+function getItalyDate(): string {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: "Europe/Rome",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function formatPrice(price: number): string {
+  return new Intl.NumberFormat("en", {
+    style: "currency",
+    currency: "EUR",
+  }).format(price);
+}
 
 export const metadata: Metadata = {
   title: "Christmas Gathering | Mongolian Students in Italy",
@@ -36,6 +73,19 @@ export default async function ChristmasPage() {
         timeZone: "UTC",
       }).format(new Date(`${event.date}T12:00:00Z`))
     : "";
+  const today = getItalyDate();
+  const ticketTiers = Object.entries(event.ticketPricing) as [
+    keyof typeof ticketTierLabels,
+    TicketTier,
+  ][];
+  const activeTicket = ticketTiers.find(
+    ([, tier]) => today >= tier.startsAt && today <= tier.endsAt,
+  );
+  const formatTierDate = (date: string) =>
+    new Intl.DateTimeFormat("en", {
+      dateStyle: "medium",
+      timeZone: "UTC",
+    }).format(new Date(`${date}T12:00:00Z`));
 
   return (
     <main className="relative flex min-h-screen items-center justify-center px-5 py-12 max-[480px]:px-[14px] sm:py-16">
@@ -126,6 +176,54 @@ export default async function ChristmasPage() {
                 </p>
               )}
             </div>
+
+            <section className="mt-7 grid gap-4">
+              <div className="rounded-2xl border-2 border-[#923a35]/35 bg-[#f0ded6] px-5 py-5 text-center text-[#923a35] shadow-[0_8px_20px_rgb(146_58_53/10%)]">
+                <p className="text-[11px] font-black uppercase tracking-[.16em]">
+                  {event.cashAtGateText}
+                </p>
+              </div>
+              {event.partyDescription && (
+                <div className="rounded-2xl border border-[#c7b995] bg-[#fffdf8]/70 px-5 py-4">
+                  <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#80643a]">
+                    What&apos;s included
+                  </p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#535044]">
+                    {event.partyDescription}
+                  </p>
+                </div>
+              )}
+              <div className="rounded-2xl border border-[#24523c]/20 bg-[#dce5d6] px-5 py-4 text-[#24523c]">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-[9px] font-bold uppercase tracking-[.16em]">
+                    Ticket prices
+                  </p>
+                  {activeTicket && (
+                    <span className="rounded-full bg-[#24523c] px-3 py-1 text-[9px] font-bold uppercase tracking-[.1em] text-white">
+                      {ticketTierLabels[activeTicket[0]]} now
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                  {ticketTiers.map(([tierName, tier]) => (
+                    <div
+                      className={`rounded-xl border px-3 py-3 ${
+                        activeTicket?.[0] === tierName
+                          ? "border-[#24523c] bg-white/70"
+                          : "border-[#24523c]/15 bg-white/35"
+                      }`}
+                      key={tierName}
+                    >
+                      <p className="text-xs font-bold">{ticketTierLabels[tierName]}</p>
+                      <p className="mt-1 text-xl font-semibold">{formatPrice(tier.price)}</p>
+                      <p className="mt-1 text-[10px] leading-relaxed text-[#24523c]/75">
+                        {formatTierDate(tier.startsAt)} – {formatTierDate(tier.endsAt)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
 
             <RsvpForm />
 

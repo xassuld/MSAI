@@ -8,8 +8,15 @@ const adminApiUrl = "/api/admin";
 type SentTicketRecipient = {
   name: string;
   email: string;
+  ticketTier: "earlyBird" | "regular" | "late" | null;
   emailSentAt: string;
 };
+
+const ticketTierLabels = {
+  earlyBird: "Early Bird",
+  regular: "Regular",
+  late: "Late",
+} as const;
 
 export default function AdminTicketsPage() {
   const [tickets, setTickets] = useState<SentTicketRecipient[] | null>(null);
@@ -69,6 +76,17 @@ export default function AdminTicketsPage() {
         <p className="mt-2 text-sm text-[#62645f]">
           Each recipient is listed once, with the most recent successful email date.
         </p>
+        <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
+          <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
+            Green · Early Bird
+          </span>
+          <span className="rounded-full bg-[#ebe1cd] px-3 py-1 text-[#71572e]">
+            Yellow · Regular
+          </span>
+          <span className="rounded-full bg-[#f0ded6] px-3 py-1 text-[#923a35]">
+            Red · Late
+          </span>
+        </div>
 
         <div aria-live="polite" className="mt-7">
           {requiresLogin ? (
@@ -91,6 +109,7 @@ export default function AdminTicketsPage() {
                   <tr>
                     <th className="px-4 py-3 font-bold">Name</th>
                     <th className="px-4 py-3 font-bold">Email</th>
+                    <th className="px-4 py-3 font-bold">Ticket type</th>
                     <th className="px-4 py-3 font-bold">Last emailed</th>
                   </tr>
                 </thead>
@@ -99,6 +118,23 @@ export default function AdminTicketsPage() {
                     <tr className="bg-[#fffdf8]/70" key={ticket.email}>
                       <td className="px-4 py-3 font-semibold">{ticket.name}</td>
                       <td className="break-all px-4 py-3">{ticket.email}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
+                            ticket.ticketTier === "earlyBird"
+                              ? "bg-[#dce5d6] text-[#24523c]"
+                              : ticket.ticketTier === "regular"
+                                ? "bg-[#ebe1cd] text-[#71572e]"
+                                : ticket.ticketTier === "late"
+                                  ? "bg-[#f0ded6] text-[#923a35]"
+                                  : "bg-[#e8dfcf] text-[#62645f]"
+                          }`}
+                        >
+                          {ticket.ticketTier
+                            ? ticketTierLabels[ticket.ticketTier]
+                            : "Older ticket"}
+                        </span>
+                      </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[#62645f]">
                         <time dateTime={ticket.emailSentAt}>
                           {new Intl.DateTimeFormat("en", {

@@ -1,5 +1,6 @@
 import { app } from "./app.js";
 import { closeMongoDB, mongoReady } from "./mongodb.js";
+import { closeMongoose } from "./mongoose.js";
 
 const port = Number(process.env.PORT ?? 4000);
 
@@ -23,6 +24,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 
       void closeMongoDB().catch(() => {
         console.error("Failed to close the MongoDB connection cleanly.");
+        process.exitCode = 1;
+      });
+      void closeMongoose().catch(() => {
+        console.error("Failed to close the Mongoose connection cleanly.");
         process.exitCode = 1;
       });
     });

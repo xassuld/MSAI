@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import QRCode from "qrcode";
-import type { EventData } from "./event-data.js";
+import type { EventData, TicketTierName } from "./event-data.js";
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (character) => {
@@ -27,7 +27,9 @@ export async function sendAdmissionTicket(
   recipient: string,
   attendeeName: string,
   ticketCode: string,
+  ticketTier: TicketTierName,
   event: EventData,
+  amountPaidCents = event.ticketPricing[ticketTier].price * 100,
 ): Promise<void> {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
@@ -56,9 +58,19 @@ export async function sendAdmissionTicket(
   const safeTime = escapeHtml(time);
   const safeLocation = escapeHtml(location);
   const safeTicketCode = escapeHtml(ticketCode);
+  const tierLabels: Record<TicketTierName, string> = {
+    earlyBird: "Early Bird",
+    regular: "Regular",
+    late: "Late",
+  };
+  const ticketType = tierLabels[ticketTier];
+  const ticketPrice = (amountPaidCents / 100).toFixed(2);
+  const safeTicketType = escapeHtml(ticketType);
   const safePosterUrl = event.posterUrl ? escapeHtml(event.posterUrl) : "";
+  const safePartyDescription = escapeHtml(event.partyDescription);
+  const safeCashAtGateText = escapeHtml(event.cashAtGateText);
   const eventUrl = "https://msai-eight.vercel.app/events/christmas";
-  const qrCode = await QRCode.toBuffer(eventUrl, {
+  const qrCode = await QRCode.toBuffer(ticketCode, {
     errorCorrectionLevel: "M",
     margin: 2,
     width: 280,
@@ -70,9 +82,13 @@ export async function sendAdmissionTicket(
     "",
     `Your admission ticket for ${event.title} is confirmed.`,
     `Ticket code: ${ticketCode}`,
+    `Ticket type: ${ticketType} (€${ticketPrice}, paid online by card)`,
     `Date: ${date}`,
     `Time: ${time}`,
     `Location: ${location}`,
+    "",
+    event.partyDescription,
+    event.cashAtGateText,
     "",
     `Event page: ${eventUrl}`,
     "",
@@ -102,6 +118,7 @@ export async function sendAdmissionTicket(
             <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
             <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
             <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TICKET TYPE</strong><br>${safeTicketType} · €${ticketPrice} paid online</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">DATE</strong><br>${safeDate}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TIME</strong><br>${safeTime}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>
@@ -123,6 +140,8 @@ export async function sendAdmissionTicket(
         </tr>
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
+      <p style="font-size:14px;line-height:1.6"><strong>What&apos;s included:</strong> ${safePartyDescription}</p>
+      <p style="margin:18px 0;padding:14px;border:2px solid #923a35;border-radius:10px;color:#923a35;font-size:14px;font-weight:bold;text-align:center">${safeCashAtGateText}</p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #c7b995">
         <tr>

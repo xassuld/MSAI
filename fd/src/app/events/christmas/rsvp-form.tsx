@@ -7,19 +7,17 @@ export default function RsvpForm() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
-  const [ticketCode, setTicketCode] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
     setMessage("");
-    setTicketCode("");
 
     const form = event.currentTarget;
     const formData = new FormData(form);
     try {
       const response = await fetch(
-        `${backendApiUrl}/api/events/christmas/registrations`,
+        `${backendApiUrl}/api/events/christmas/checkout`,
         {
           method: "POST",
           signal: AbortSignal.timeout(30_000),
@@ -33,24 +31,25 @@ export default function RsvpForm() {
       );
       const result = (await response.json()) as {
         error?: string;
-        ticketCode?: string;
+        checkoutUrl?: string;
       };
 
-      if (!response.ok || !result.ticketCode) {
-        throw new Error(result.error ?? "Could not send your admission ticket.");
+      if (!response.ok || !result.checkoutUrl) {
+        throw new Error(result.error ?? "Could not start checkout.");
       }
 
-      setTicketCode(result.ticketCode);
-      setMessage("Your admission ticket has been sent to your email.");
-      setIsError(false);
-      form.reset();
+      if (!result.checkoutUrl) {
+        throw new Error("Could not start checkout.");
+      }
+
+      window.location.assign(result.checkoutUrl);
     } catch (error) {
       setMessage(
         error instanceof DOMException && error.name === "TimeoutError"
-          ? "The request timed out. Your sign-up may have been saved; check your inbox and spam folder before trying again."
+          ? "The request timed out. Please try again."
           : error instanceof Error
           ? error.message
-          : "Could not complete your sign-up. Please try again.",
+          : "Could not start checkout. Please try again.",
       );
       setIsError(true);
     } finally {
@@ -116,11 +115,6 @@ export default function RsvpForm() {
           role={isError ? "alert" : "status"}
         >
           {message}
-          {ticketCode && (
-            <span className="mt-1 block font-mono font-semibold">
-              Ticket code: {ticketCode}
-            </span>
-          )}
         </p>
       )}
     </section>

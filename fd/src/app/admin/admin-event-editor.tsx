@@ -14,6 +14,15 @@ type EventFields = {
   location: string;
   posterUrl: string;
   ticketInfo: string;
+  partyDescription: string;
+  cashAtGateText: string;
+  maxCapacity: number;
+  soldCount: number;
+  ticketPricing: {
+    earlyBird: { price: number; startsAt: string; endsAt: string };
+    regular: { price: number; startsAt: string; endsAt: string };
+    late: { price: number; startsAt: string; endsAt: string };
+  };
 };
 
 const initialEvent: EventFields = {
@@ -24,6 +33,15 @@ const initialEvent: EventFields = {
   location: "",
   posterUrl: "",
   ticketInfo: "",
+  partyDescription: "",
+  cashAtGateText: "",
+  maxCapacity: 100,
+  soldCount: 0,
+  ticketPricing: {
+    earlyBird: { price: 0, startsAt: "", endsAt: "" },
+    regular: { price: 0, startsAt: "", endsAt: "" },
+    late: { price: 0, startsAt: "", endsAt: "" },
+  },
 };
 
 type CloudinaryUpload = {
@@ -306,8 +324,25 @@ export default function AdminEventEditor() {
     }
   }
 
-  function updateField(field: keyof EventFields, value: string) {
+  function updateField(field: keyof EventFields, value: string | number) {
     setEvent((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateTicketTier(
+    tier: keyof EventFields["ticketPricing"],
+    field: "price" | "startsAt" | "endsAt",
+    value: string,
+  ) {
+    setEvent((current) => ({
+      ...current,
+      ticketPricing: {
+        ...current.ticketPricing,
+        [tier]: {
+          ...current.ticketPricing[tier],
+          [field]: field === "price" ? Number(value) : value,
+        },
+      },
+    }));
   }
 
   const fieldClass =
@@ -530,6 +565,99 @@ export default function AdminEventEditor() {
                 value={event.ticketInfo}
               />
             </label>
+
+            <label className="grid text-sm font-semibold text-[#15294b]">
+              Party description
+              <textarea
+                className={`${fieldClass} min-h-24 resize-y`}
+                maxLength={2000}
+                onChange={(event) => updateField("partyDescription", event.target.value)}
+                placeholder="What is included with admission?"
+                rows={3}
+                value={event.partyDescription}
+              />
+            </label>
+
+            <label className="grid text-sm font-semibold text-[#15294b]">
+              Payment notice
+              <textarea
+                className={`${fieldClass} min-h-20 resize-y`}
+                maxLength={500}
+                onChange={(event) => updateField("cashAtGateText", event.target.value)}
+                placeholder="Pay securely online by card at checkout."
+                rows={2}
+                value={event.cashAtGateText}
+              />
+            </label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid text-sm font-semibold text-[#15294b]">
+                Maximum capacity
+                <input
+                  className={fieldClass}
+                  min="1"
+                  onChange={(event) =>
+                    updateField("maxCapacity", Number(event.target.value))
+                  }
+                  type="number"
+                  value={event.maxCapacity}
+                />
+              </label>
+              <label className="grid text-sm font-semibold text-[#15294b]">
+                Paid tickets sold
+                <input
+                  className={`${fieldClass} bg-[#e8dfcf]`}
+                  disabled
+                  type="number"
+                  value={event.soldCount}
+                />
+              </label>
+            </div>
+
+            <fieldset className="grid gap-4 rounded-2xl border border-[#c7b995] bg-[#fffdf8]/60 p-4">
+              <legend className="px-1 text-sm font-semibold text-[#15294b]">
+                Calendar ticket prices (paid online)
+              </legend>
+              {(
+                [
+                  ["earlyBird", "Early Bird"],
+                  ["regular", "Regular"],
+                  ["late", "Late"],
+                ] as const
+              ).map(([tier, label]) => (
+                <div className="grid gap-3 border-t border-[#c7b995]/60 pt-4 first:border-t-0 first:pt-0 sm:grid-cols-[1fr_1fr_1fr]" key={tier}>
+                  <label className="grid text-xs font-semibold text-[#15294b]">
+                    {label} price (€)
+                    <input
+                      className={fieldClass}
+                      min="0"
+                      onChange={(event) => updateTicketTier(tier, "price", event.target.value)}
+                      step="0.01"
+                      type="number"
+                      value={event.ticketPricing[tier].price}
+                    />
+                  </label>
+                  <label className="grid text-xs font-semibold text-[#15294b]">
+                    Starts
+                    <input
+                      className={fieldClass}
+                      onChange={(event) => updateTicketTier(tier, "startsAt", event.target.value)}
+                      type="date"
+                      value={event.ticketPricing[tier].startsAt}
+                    />
+                  </label>
+                  <label className="grid text-xs font-semibold text-[#15294b]">
+                    Ends
+                    <input
+                      className={fieldClass}
+                      onChange={(event) => updateTicketTier(tier, "endsAt", event.target.value)}
+                      type="date"
+                      value={event.ticketPricing[tier].endsAt}
+                    />
+                  </label>
+                </div>
+              ))}
+            </fieldset>
 
             <div className="grid gap-2 text-sm font-semibold text-[#15294b]">
               <span>Event poster</span>
