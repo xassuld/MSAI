@@ -147,7 +147,7 @@ type RegistrationAttempt = {
 };
 
 const registrationWindowMs = 15 * 60 * 1000;
-const maxRegistrationAttempts = 5;
+const maxRegistrationAttempts = 30;
 let registrationTtlIndex: Promise<string> | undefined;
 
 async function getRegistrationAttemptsCollection(): Promise<
