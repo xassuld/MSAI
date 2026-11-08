@@ -66,9 +66,9 @@ export async function sendAdmissionTicket(
   const ticketType = tierLabels[ticketTier];
   const ticketPrice = (amountPaidCents / 100).toFixed(2);
   const safeTicketType = escapeHtml(ticketType);
-  const safePosterUrl = event.posterUrl ? escapeHtml(event.posterUrl) : "";
   const safePartyDescription = escapeHtml(event.partyDescription);
   const eventUrl = "https://msai-eight.vercel.app/events/christmas";
+  const ticketUrl = `https://msai-eight.vercel.app/tickets/${encodeURIComponent(ticketCode)}`;
   const qrCode = await QRCode.toBuffer(ticketCode, {
     errorCorrectionLevel: "M",
     margin: 2,
@@ -88,6 +88,8 @@ export async function sendAdmissionTicket(
     `Location: ${location}`,
     "",
     event.partyDescription,
+    "",
+    `Your online ticket and QR code: ${ticketUrl}`,
     "",
     `Event page: ${eventUrl}`,
     "",
@@ -124,33 +126,23 @@ export async function sendAdmissionTicket(
             <p style="margin:14px 0 0;color:#80643a;font-size:8px;font-weight:bold;letter-spacing:1px">PRESENT THIS TICKET AT ENTRY</p>
           </td>
           <td width="52%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
-            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">
-              <tr>
-                <td valign="middle" style="padding:12px 8px;text-align:center">
-                  ${
-                    safePosterUrl
-                      ? `<img src="${safePosterUrl}" alt="${safeTitle} event poster" width="220" style="display:block;width:100%;max-width:220px;height:auto;object-fit:contain;margin:0 auto;border-radius:4px">`
-                      : `<div style="box-sizing:border-box;width:100%;max-width:220px;height:310px;margin:0 auto;padding:10px 4px;border:1px solid #c7b995;background:#f3ecdf;font-family:Georgia,serif;font-size:11px">${safeTitle}</div>`
-                  }
-                </td>
-              </tr>
-            </table>
+            <p style="margin:0 0 10px;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">SCAN AT ENTRY</p>
+            <img src="cid:event-signup-qr" alt="QR code for ticket ${safeTicketCode}" width="168" height="168" style="display:block;width:168px;height:168px;max-width:100%;margin:0 auto;padding:8px;box-sizing:border-box;background:#fff;border:1px solid #c7b995;border-radius:8px">
+            <p style="margin:8px 0 0;color:#535044;font-size:10px">Ticket code: ${safeTicketCode}</p>
           </td>
         </tr>
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
       <p style="font-size:14px;line-height:1.6"><strong>Amount paid:</strong> €${ticketPrice}</p>
       <p style="font-size:14px;line-height:1.6"><strong>What&apos;s included:</strong> ${safePartyDescription}</p>
+      <p style="font-size:12px"><a href="${ticketUrl}" style="color:#15294b">Open your online ticket and QR code</a></p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #c7b995">
         <tr>
           <td valign="middle" style="padding:18px 8px 0;text-align:center">
             <p style="margin:0;color:#15294b;font-family:Georgia,serif;font-size:26px;font-weight:bold;line-height:1.2">SEE YOU THERE ❤️</p>
           </td>
-          <td align="center" valign="middle" style="padding:18px 8px 0">
-            <img src="cid:event-signup-qr" alt="Ticket code QR code" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
-            <p style="margin:6px 0 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">€${ticketPrice} PAID</p>
-          </td>
+          <td align="center" valign="middle" style="padding:18px 8px 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">€${ticketPrice} PAID</td>
         </tr>
       </table>
     </main>

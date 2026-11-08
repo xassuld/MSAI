@@ -18,6 +18,7 @@ type TicketData = {
     tier: "earlyBird" | "regular" | "late";
     amountPaidCents: number;
     ticketNumber: number;
+    qrCodeDataUrl: string;
   };
 };
 
@@ -117,11 +118,27 @@ export default async function TicketPage({
             />
           )}
 
-          <div className="mt-8 rounded-xl border border-[#c7b995] bg-[#f3ecdf] px-4 py-3 text-sm">
-            <p className="font-semibold">Ticket code: {ticket.code}</p>
-          <p className="mt-1 text-[#535044]">
-            Ticket number: {ticket.ticketNumber} · Payment confirmed
-          </p>
+          <div className="mt-8 grid gap-5 rounded-2xl border border-[#c7b995] bg-[#f3ecdf] p-5 sm:grid-cols-[1fr_auto] sm:items-center sm:p-6">
+            <div className="text-sm">
+              <p className="text-[10px] font-bold uppercase tracking-[.16em] text-[#80643a]">
+                Scan at entry
+              </p>
+              <p className="mt-2 font-semibold">Ticket code: {ticket.code}</p>
+              <p className="mt-1 text-[#535044]">
+                Ticket number: {ticket.ticketNumber} · Payment confirmed
+              </p>
+              <p className="mt-3 text-xs leading-relaxed text-[#535044]">
+                This QR code contains your ticket code for admission scanning.
+              </p>
+            </div>
+            <Image
+              alt={`QR code for ticket ${ticket.code}`}
+              className="mx-auto h-40 w-40 rounded-lg border border-[#c7b995] bg-white p-2 sm:mx-0"
+              height={160}
+              src={ticket.qrCodeDataUrl}
+              unoptimized
+              width={160}
+            />
           </div>
           {event.partyDescription && (
             <p className="mt-5 text-sm leading-6 text-[#535044]">

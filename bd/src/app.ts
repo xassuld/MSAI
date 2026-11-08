@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import cors from "cors";
 import { v2 as cloudinary } from "cloudinary";
 import mongoose from "mongoose";
+import QRCode from "qrcode";
 import express, {
   type ErrorRequestHandler,
   type Request,
@@ -188,6 +189,12 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
     }
 
     const event = await getChristmasEvent();
+    const qrCodeDataUrl = await QRCode.toDataURL(ticket.ticketCode, {
+      errorCorrectionLevel: "M",
+      margin: 2,
+      width: 280,
+      color: { dark: "#15294b", light: "#ffffff" },
+    });
     response.set("Cache-Control", "no-store");
     response.json({
       event: {
@@ -203,6 +210,7 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
         tier: ticket.ticketTier,
         amountPaidCents: ticket.amountPaidCents,
         ticketNumber: ticket.ticketNumber,
+        qrCodeDataUrl,
       },
     });
   } catch (error) {
