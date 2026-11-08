@@ -66,6 +66,9 @@ updated ticket indexes.
 - `POST /api/admin/tickets/check-in` requires the existing authenticated
   iron-session, and atomically marks a verified paid ticket as checked in.
   Repeat scans return HTTP 409.
+- The admin recipient list can delete only the latest, unscanned Sandbox ticket.
+  Deletion invalidates that ticket and reopens its last spot without issuing a
+  refund; live tickets cannot be deleted through this action.
 - Admin event editing, paid ticket reporting, and event poster upload remain
   authenticated.
 

@@ -34,6 +34,7 @@ export type SentAdmissionTicket = Pick<
   "name" | "email" | "ticketTier" | "emailSentAt"
 > & {
   ticketNumber: number;
+  isSandbox: boolean;
   emailSentAt: Date;
 };
 
@@ -216,10 +217,17 @@ export async function getSentAdmissionTickets(): Promise<
 > {
   await mongooseReady;
   await ensureTicketIndexes();
-  return TicketModel.find({ isPaid: true, emailSentAt: { $exists: true } })
+  const tickets = await TicketModel.find({
+    isPaid: true,
+    emailSentAt: { $exists: true },
+  })
     .sort({ emailSentAt: -1 })
-    .select("name email ticketTier ticketNumber emailSentAt")
+    .select("name email ticketTier ticketNumber stripeSessionId emailSentAt")
     .lean();
+  return tickets.map(({ stripeSessionId, ...ticket }) => ({
+    ...ticket,
+    isSandbox: stripeSessionId.startsWith("cs_test_"),
+  }));
 }
 
 export async function clearUnpaidLegacyTickets(): Promise<number> {

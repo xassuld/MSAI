@@ -10,6 +10,7 @@ type SentTicketRecipient = {
   email: string;
   ticketNumber: number;
   ticketTier: "earlyBird" | "regular" | "late" | null;
+  isSandbox: boolean;
   emailSentAt: string;
 };
 
@@ -23,6 +24,42 @@ export default function AdminTicketsPage() {
   const [tickets, setTickets] = useState<SentTicketRecipient[] | null>(null);
   const [error, setError] = useState("");
   const [requiresLogin, setRequiresLogin] = useState(false);
+  const [deletingTicketNumber, setDeletingTicketNumber] = useState<number | null>(
+    null,
+  );
+  const [actionMessage, setActionMessage] = useState("");
+
+  async function deleteSandboxTicket(ticket: SentTicketRecipient) {
+    const confirmed = window.confirm(
+      `Delete Sandbox test ticket #${ticket.ticketNumber} for ${ticket.email}? This will invalidate its ticket code and reopen the last spot. No refund will be issued. Only the latest unscanned Sandbox ticket can be deleted.`,
+    );
+    if (!confirmed) return;
+
+    setDeletingTicketNumber(ticket.ticketNumber);
+    setActionMessage("");
+    try {
+      const response = await fetch(
+        `${adminApiUrl}/tickets/${ticket.ticketNumber}`,
+        { method: "DELETE", credentials: "include" },
+      );
+      const result = (await response.json()) as { error?: string; deleted?: boolean };
+      if (!response.ok || result.deleted !== true) {
+        throw new Error(result.error ?? "Could not delete the Sandbox ticket.");
+      }
+      setTickets((current) =>
+        current?.filter((item) => item.ticketNumber !== ticket.ticketNumber) ?? [],
+      );
+      setActionMessage(
+        `Sandbox ticket #${ticket.ticketNumber} was deleted. No refund was issued.`,
+      );
+    } catch (cause) {
+      setActionMessage(
+        cause instanceof Error ? cause.message : "Could not delete the Sandbox ticket.",
+      );
+    } finally {
+      setDeletingTicketNumber(null);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -77,6 +114,11 @@ export default function AdminTicketsPage() {
         <p className="mt-2 text-sm text-[#62645f]">
           Each paid ticket is listed with its successful email date.
         </p>
+        <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
+          Only the latest unscanned Sandbox test ticket can be deleted here.
+          Deleting it invalidates its ticket code and reopens the last spot; no
+          refund is issued. Live tickets cannot be deleted from this page.
+        </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
             Green · Early Bird
@@ -90,6 +132,14 @@ export default function AdminTicketsPage() {
         </div>
 
         <div aria-live="polite" className="mt-7">
+          {actionMessage && (
+            <p
+              className="mb-4 rounded-xl bg-[#e8dfcf] px-4 py-3 text-sm text-[#15294b]"
+              role="status"
+            >
+              {actionMessage}
+            </p>
+          )}
           {requiresLogin ? (
             <p className="rounded-xl bg-[#f0ded6] px-4 py-3 text-sm text-[#923a35]">
               Please <Link className="font-semibold underline" href="/admin">sign in</Link>{" "}
@@ -112,6 +162,7 @@ export default function AdminTicketsPage() {
                     <th className="px-4 py-3 font-bold">Email</th>
                     <th className="px-4 py-3 font-bold">Ticket type</th>
                     <th className="px-4 py-3 font-bold">Last emailed</th>
+                    <th className="px-4 py-3 font-bold">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#c7b995]/60">
@@ -143,6 +194,22 @@ export default function AdminTicketsPage() {
                             timeStyle: "short",
                           }).format(new Date(ticket.emailSentAt))}
                         </time>
+                      </td>
+                      <td className="px-4 py-3">
+                        {ticket.isSandbox ? (
+                          <button
+                            className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
+                            disabled={deletingTicketNumber !== null}
+                            onClick={() => void deleteSandboxTicket(ticket)}
+                            type="button"
+                          >
+                            {deletingTicketNumber === ticket.ticketNumber
+                              ? "Deleting…"
+                              : "Delete test"}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-[#62645f]">Live ticket</span>
+                        )}
                       </td>
                     </tr>
                   ))}

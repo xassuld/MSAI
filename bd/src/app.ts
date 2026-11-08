@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import cors from "cors";
 import { v2 as cloudinary } from "cloudinary";
+import mongoose from "mongoose";
 import express, {
   type ErrorRequestHandler,
   type Request,
@@ -326,6 +327,7 @@ app.get("/api/admin/tickets", async (request, response, next) => {
         ...ticket,
         ticketTier: ticket.ticketTier ?? null,
         ticketNumber: ticket.ticketNumber,
+        isSandbox: ticket.isSandbox,
         emailSentAt: ticket.emailSentAt.toISOString(),
       })),
     });
@@ -346,6 +348,86 @@ app.delete("/api/admin/tickets", async (request, response, next) => {
 
     response.set("Cache-Control", "no-store");
     response.json({ deletedCount: await clearUnpaidLegacyTickets() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const adminSession = await getAdminSession(request, response);
+    if (!adminSession.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const ticketNumber = Number(request.params.ticketNumber);
+    if (!Number.isInteger(ticketNumber) || ticketNumber < 1 || ticketNumber > 120) {
+      response.status(400).json({ error: "Enter a valid ticket number." });
+      return;
+    }
+
+    await mongooseReady;
+    await ensureChristmasEventState(await getChristmasEvent());
+    const mongoSession = await mongoose.startSession();
+    const outcome: {
+      result: "deleted" | "notFound" | "notSandbox" | "checkedIn" | "notLatest";
+    } = { result: "notFound" };
+
+    try {
+      await mongoSession.withTransaction(async () => {
+        const ticket = await TicketModel.findOne({ ticketNumber }).session(mongoSession);
+        if (!ticket) {
+          outcome.result = "notFound";
+          return;
+        }
+        if (!ticket.stripeSessionId.startsWith("cs_test_")) {
+          outcome.result = "notSandbox";
+          return;
+        }
+        if (ticket.isCheckedIn) {
+          outcome.result = "checkedIn";
+          return;
+        }
+
+        const event = await EventModel.findOneAndUpdate(
+          { _id: "christmas", soldCount: ticketNumber },
+          { $inc: { soldCount: -1 } },
+          { new: true, session: mongoSession },
+        );
+        if (!event) {
+          outcome.result = "notLatest";
+          return;
+        }
+
+        const deletion = await TicketModel.deleteOne(
+          { _id: ticket._id, stripeSessionId: ticket.stripeSessionId },
+          { session: mongoSession },
+        );
+        if (deletion.deletedCount !== 1) {
+          throw new Error("Sandbox test ticket could not be deleted.");
+        }
+        outcome.result = "deleted";
+      });
+    } finally {
+      await mongoSession.endSession();
+    }
+
+    if (outcome.result === "deleted") {
+      response.json({ deleted: true, ticketNumber });
+    } else if (outcome.result === "notFound") {
+      response.status(404).json({ error: "Ticket not found." });
+    } else if (outcome.result === "notSandbox") {
+      response.status(409).json({ error: "Only Sandbox test tickets can be deleted here." });
+    } else if (outcome.result === "checkedIn") {
+      response.status(409).json({ error: "A checked-in ticket cannot be deleted." });
+    } else {
+      response.status(409).json({
+        error: "Only the latest sold ticket can be deleted so capacity and ticket numbers remain consistent.",
+      });
+    }
   } catch (error) {
     next(error);
   }
