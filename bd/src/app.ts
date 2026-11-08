@@ -20,13 +20,18 @@ import {
   type EditableEvent,
 } from "./event-data.js";
 import { getAdminSession } from "./admin-session.js";
-import { ensureChristmasEventState } from "./ticketing.js";
+import {
+  ensureChristmasEventState,
+  generateTicketCode,
+  resolveTicketTier,
+} from "./ticketing.js";
 import {
   createCheckoutSession,
   handleStripeWebhook,
 } from "./ticketing-controller.js";
 import { mongooseReady } from "./mongoose.js";
-import { EventModel, TicketModel } from "./models.js";
+import { EventModel, TicketModel, type TicketDocument } from "./models.js";
+import { sendAdmissionTicket } from "./ticket-email.js";
 
 validateEnvironment();
 
@@ -139,6 +144,27 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
   return true;
 }
 
+async function deliverComplimentaryTicket(ticket: TicketDocument): Promise<void> {
+  const event = await getChristmasEvent();
+  await sendAdmissionTicket(
+    ticket.email,
+    ticket.name,
+    ticket.ticketCode,
+    ticket.ticketTier,
+    event,
+    0,
+    true,
+  );
+  await TicketModel.updateOne(
+    {
+      ticketCode: ticket.ticketCode,
+      isComplimentary: true,
+      emailSentAt: { $exists: false },
+    },
+    { $set: { emailSentAt: new Date() } },
+  );
+}
+
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
@@ -182,7 +208,10 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
   try {
     await mongooseReady;
     await ensureChristmasEventState(await getChristmasEvent());
-    const ticket = await TicketModel.findOne({ ticketCode, isPaid: true }).lean();
+    const ticket = await TicketModel.findOne({
+      ticketCode,
+      $or: [{ isPaid: true }, { isComplimentary: true }],
+    }).lean();
     if (!ticket) {
       response.status(404).json({ error: "Ticket not found." });
       return;
@@ -213,6 +242,7 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
         tier: ticket.ticketTier,
         amountPaidCents: ticket.amountPaidCents,
         ticketNumber: ticket.ticketNumber,
+        isComplimentary: ticket.isComplimentary ?? false,
         qrCodeDataUrl,
       },
     });
@@ -339,9 +369,167 @@ app.get("/api/admin/tickets", async (request, response, next) => {
         ticketTier: ticket.ticketTier ?? null,
         ticketNumber: ticket.ticketNumber,
         isSandbox: ticket.isSandbox,
-        emailSentAt: ticket.emailSentAt.toISOString(),
+        emailSentAt: ticket.emailSentAt?.toISOString() ?? null,
       })),
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/tickets/complimentary", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const adminSession = await getAdminSession(request, response);
+    if (!adminSession.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const name =
+      typeof request.body?.name === "string"
+        ? request.body.name.trim().replace(/\s+/g, " ")
+        : "";
+    const email =
+      typeof request.body?.email === "string"
+        ? request.body.email.trim().toLowerCase()
+        : "";
+    if (
+      !name ||
+      name.length > 120 ||
+      /[\u0000-\u001f\u007f]/.test(name) ||
+      email.length > 254 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      response.status(400).json({ error: "Enter a valid name and email address." });
+      return;
+    }
+
+    await mongooseReady;
+    await ensureChristmasEventState(await getChristmasEvent());
+    const mongoSession = await mongoose.startSession();
+    let ticket: TicketDocument | undefined;
+    let soldOut = false;
+    try {
+      await mongoSession.withTransaction(async () => {
+        const updatedEvent = await EventModel.findOneAndUpdate(
+          { _id: "christmas", soldCount: { $lt: 120 } },
+          { $inc: { soldCount: 1 } },
+          { new: true, session: mongoSession },
+        );
+        if (!updatedEvent) {
+          soldOut = true;
+          return;
+        }
+
+        const tier = resolveTicketTier(updatedEvent.soldCount - 1);
+        [ticket] = await TicketModel.create(
+          [
+            {
+              name,
+              email,
+              ticketCode: generateTicketCode(),
+              ticketNumber: updatedEvent.soldCount,
+              ticketTier: tier.key,
+              amountPaidCents: 0,
+              currency: "eur",
+              isPaid: false,
+              isComplimentary: true,
+            },
+          ],
+          { session: mongoSession },
+        );
+      });
+    } finally {
+      await mongoSession.endSession();
+    }
+
+    if (soldOut) {
+      response.status(409).json({ error: "Event is completely sold out." });
+      return;
+    }
+    if (!ticket) {
+      throw new Error("Complimentary ticket transaction completed without creating a ticket.");
+    }
+
+    try {
+      await deliverComplimentaryTicket(ticket);
+    } catch (error) {
+      console.error("Complimentary ticket was created but email delivery failed.", {
+        ticketNumber: ticket.ticketNumber,
+        error,
+      });
+      response.status(502).json({
+        error: "Ticket created, but email delivery failed. Retry the email from the ticket list.",
+        ticket: {
+          name: ticket.name,
+          email: ticket.email,
+          ticketNumber: ticket.ticketNumber,
+          ticketTier: ticket.ticketTier,
+          isComplimentary: true,
+          isSandbox: false,
+          emailSentAt: null,
+        },
+      });
+      return;
+    }
+
+    response.status(201).json({
+      ticket: {
+        name: ticket.name,
+        email: ticket.email,
+        ticketNumber: ticket.ticketNumber,
+        ticketTier: ticket.ticketTier,
+        isComplimentary: true,
+        isSandbox: false,
+        emailSentAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/tickets/:ticketNumber/resend", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const adminSession = await getAdminSession(request, response);
+    if (!adminSession.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const ticketNumber = Number(request.params.ticketNumber);
+    if (!Number.isInteger(ticketNumber) || ticketNumber < 1 || ticketNumber > 120) {
+      response.status(400).json({ error: "Enter a valid ticket number." });
+      return;
+    }
+
+    await mongooseReady;
+    const ticket = await TicketModel.findOne({
+      ticketNumber,
+      isComplimentary: true,
+      emailSentAt: { $exists: false },
+    });
+    if (!ticket) {
+      response.status(404).json({ error: "Unsent complimentary ticket not found." });
+      return;
+    }
+
+    try {
+      await deliverComplimentaryTicket(ticket);
+    } catch (error) {
+      console.error("Could not resend complimentary ticket email.", {
+        ticketNumber,
+        error,
+      });
+      response.status(502).json({ error: "Could not send the ticket email. Please try again." });
+      return;
+    }
+
+    response.json({ emailSentAt: new Date().toISOString() });
   } catch (error) {
     next(error);
   }
@@ -394,7 +582,7 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
           outcome.result = "notFound";
           return;
         }
-        if (!ticket.stripeSessionId.startsWith("cs_test_")) {
+        if (!ticket.stripeSessionId?.startsWith("cs_test_")) {
           outcome.result = "notSandbox";
           return;
         }
@@ -466,13 +654,20 @@ app.post("/api/admin/tickets/check-in", async (request, response, next) => {
     await mongooseReady;
     await ensureChristmasEventState(await getChristmasEvent());
     const ticket = await TicketModel.findOneAndUpdate(
-      { ticketCode, isPaid: true, isCheckedIn: false },
+      {
+        ticketCode,
+        isCheckedIn: false,
+        $or: [{ isPaid: true }, { isComplimentary: true }],
+      },
       { $set: { isCheckedIn: true, checkedInAt: new Date() } },
       { new: true },
     );
     if (!ticket) {
       const existingTicket = await TicketModel.findOne({ ticketCode }).lean();
-      if (existingTicket?.isPaid && existingTicket.isCheckedIn) {
+      if (
+        (existingTicket?.isPaid || existingTicket?.isComplimentary) &&
+        existingTicket.isCheckedIn
+      ) {
         response.status(409).json({
           error: "Ticket already scanned",
           checkedInAt: existingTicket.checkedInAt,
@@ -480,14 +675,16 @@ app.post("/api/admin/tickets/check-in", async (request, response, next) => {
       }
       else {
         response.status(existingTicket ? 400 : 404).json({
-          error: existingTicket ? "Ticket has not been paid." : "Ticket not found.",
+          error: existingTicket
+            ? "Ticket is not eligible for entry."
+            : "Ticket not found.",
         });
       }
       return;
     }
     response.json({
       name: ticket.name,
-      tier: ticket.ticketTier,
+      tier: ticket.isComplimentary ? "Complimentary" : ticket.ticketTier,
       ticketNumber: ticket.ticketNumber,
       message: "Entry authorized",
     });

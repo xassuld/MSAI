@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 const adminApiUrl = "/api/admin";
 
@@ -10,8 +10,9 @@ type SentTicketRecipient = {
   email: string;
   ticketNumber: number;
   ticketTier: "earlyBird" | "regular" | "late" | null;
+  isComplimentary: boolean;
   isSandbox: boolean;
-  emailSentAt: string;
+  emailSentAt: string | null;
 };
 
 const ticketTierLabels = {
@@ -28,6 +29,82 @@ export default function AdminTicketsPage() {
     null,
   );
   const [actionMessage, setActionMessage] = useState("");
+  const [complimentaryName, setComplimentaryName] = useState("");
+  const [complimentaryEmail, setComplimentaryEmail] = useState("");
+  const [sendingComplimentary, setSendingComplimentary] = useState(false);
+  const [resendingTicketNumber, setResendingTicketNumber] = useState<number | null>(
+    null,
+  );
+
+  function upsertTicket(ticket: SentTicketRecipient) {
+    setTickets((current) =>
+      [
+        ticket,
+        ...(current ?? []).filter((item) => item.ticketNumber !== ticket.ticketNumber),
+      ].sort((a, b) => b.ticketNumber - a.ticketNumber),
+    );
+  }
+
+  async function sendComplimentaryTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSendingComplimentary(true);
+    setActionMessage("");
+    try {
+      const response = await fetch(`${adminApiUrl}/tickets/complimentary`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: complimentaryName,
+          email: complimentaryEmail,
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        ticket?: SentTicketRecipient;
+      };
+      if (result.ticket) upsertTicket(result.ticket);
+      if (!response.ok) throw new Error(result.error ?? "Could not send complimentary ticket.");
+      if (!result.ticket) throw new Error("The server did not return the issued ticket.");
+      setComplimentaryName("");
+      setComplimentaryEmail("");
+      setActionMessage(
+        `Complimentary ticket #${result.ticket.ticketNumber} was emailed to ${result.ticket.email}.`,
+      );
+    } catch (cause) {
+      setActionMessage(
+        cause instanceof Error ? cause.message : "Could not send complimentary ticket.",
+      );
+    } finally {
+      setSendingComplimentary(false);
+    }
+  }
+
+  async function resendComplimentaryTicket(ticket: SentTicketRecipient) {
+    setResendingTicketNumber(ticket.ticketNumber);
+    setActionMessage("");
+    try {
+      const response = await fetch(
+        `${adminApiUrl}/tickets/${ticket.ticketNumber}/resend`,
+        { method: "POST", credentials: "include" },
+      );
+      const result = (await response.json()) as {
+        error?: string;
+        emailSentAt?: string;
+      };
+      if (!response.ok || !result.emailSentAt) {
+        throw new Error(result.error ?? "Could not resend complimentary ticket.");
+      }
+      upsertTicket({ ...ticket, emailSentAt: result.emailSentAt });
+      setActionMessage(`Ticket #${ticket.ticketNumber} was emailed to ${ticket.email}.`);
+    } catch (cause) {
+      setActionMessage(
+        cause instanceof Error ? cause.message : "Could not resend complimentary ticket.",
+      );
+    } finally {
+      setResendingTicketNumber(null);
+    }
+  }
 
   async function deleteSandboxTicket(ticket: SentTicketRecipient) {
     const confirmed = window.confirm(
@@ -112,7 +189,7 @@ export default function AdminTicketsPage() {
         </p>
         <h1 className="mt-2 font-serif text-3xl">Ticket recipients</h1>
         <p className="mt-2 text-sm text-[#62645f]">
-          Each paid ticket is listed with its successful email date.
+          Paid and complimentary tickets are listed with their email status.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
           Only the latest unscanned Sandbox test ticket can be deleted here.
@@ -130,6 +207,49 @@ export default function AdminTicketsPage() {
             Red · Late
           </span>
         </div>
+
+        <form
+          className="mt-7 grid gap-4 rounded-2xl border border-[#c7b995]/80 bg-[#fffdf8]/70 p-5 sm:grid-cols-2 sm:p-6"
+          onSubmit={sendComplimentaryTicket}
+        >
+          <div className="sm:col-span-2">
+            <h2 className="font-serif text-xl">Send a complimentary ticket</h2>
+            <p className="mt-1 text-xs leading-relaxed text-[#62645f]">
+              No payment is collected. This ticket reserves one of the 120
+              admission spots and will be labeled Complimentary.
+            </p>
+          </div>
+          <label className="grid text-sm font-semibold">
+            Recipient name
+            <input
+              autoComplete="name"
+              className="mt-1.5 w-full rounded-xl border border-[#c7b995] bg-white px-3.5 py-3 text-sm font-normal outline-none focus:border-[#15294b] focus:ring-2 focus:ring-[#15294b]/15"
+              maxLength={120}
+              onChange={(event) => setComplimentaryName(event.target.value)}
+              required
+              value={complimentaryName}
+            />
+          </label>
+          <label className="grid text-sm font-semibold">
+            Recipient email
+            <input
+              autoComplete="email"
+              className="mt-1.5 w-full rounded-xl border border-[#c7b995] bg-white px-3.5 py-3 text-sm font-normal outline-none focus:border-[#15294b] focus:ring-2 focus:ring-[#15294b]/15"
+              maxLength={254}
+              onChange={(event) => setComplimentaryEmail(event.target.value)}
+              required
+              type="email"
+              value={complimentaryEmail}
+            />
+          </label>
+          <button
+            className="rounded-xl bg-[#15294b] px-5 py-3 text-sm font-semibold text-[#fffdf8] transition hover:bg-[#263d75] disabled:opacity-50 sm:col-span-2"
+            disabled={sendingComplimentary}
+            type="submit"
+          >
+            {sendingComplimentary ? "Issuing ticket…" : "Issue and email free ticket"}
+          </button>
+        </form>
 
         <div aria-live="polite" className="mt-7">
           {actionMessage && (
@@ -182,21 +302,38 @@ export default function AdminTicketsPage() {
                                   : "bg-[#e8dfcf] text-[#62645f]"
                           }`}
                         >
-                          {ticket.ticketTier
+                          {ticket.isComplimentary
+                            ? "Complimentary"
+                            : ticket.ticketTier
                             ? ticketTierLabels[ticket.ticketTier]
                             : "Older ticket"}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[#62645f]">
-                        <time dateTime={ticket.emailSentAt}>
-                          {new Intl.DateTimeFormat("en", {
-                            dateStyle: "medium",
-                            timeStyle: "short",
-                          }).format(new Date(ticket.emailSentAt))}
-                        </time>
+                        {ticket.emailSentAt ? (
+                          <time dateTime={ticket.emailSentAt}>
+                            {new Intl.DateTimeFormat("en", {
+                              dateStyle: "medium",
+                              timeStyle: "short",
+                            }).format(new Date(ticket.emailSentAt))}
+                          </time>
+                        ) : (
+                          "Email not sent"
+                        )}
                       </td>
                       <td className="px-4 py-3">
-                        {ticket.isSandbox ? (
+                        {ticket.isComplimentary && !ticket.emailSentAt ? (
+                          <button
+                            className="rounded-full border border-[#15294b]/30 px-3 py-1.5 text-xs font-semibold hover:bg-[#e8dfcf] disabled:opacity-50"
+                            disabled={resendingTicketNumber !== null}
+                            onClick={() => void resendComplimentaryTicket(ticket)}
+                            type="button"
+                          >
+                            {resendingTicketNumber === ticket.ticketNumber
+                              ? "Sending…"
+                              : "Retry email"}
+                          </button>
+                        ) : ticket.isSandbox ? (
                           <button
                             className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
                             disabled={deletingTicketNumber !== null}

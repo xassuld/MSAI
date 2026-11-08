@@ -48,10 +48,12 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
     .select("soldCount")
     .lean();
   if (currentEvent?.soldCount === undefined) {
-    const paidTicketCount = await TicketModel.countDocuments({ isPaid: true });
+    const admissionTicketCount = await TicketModel.countDocuments({
+      $or: [{ isPaid: true }, { isComplimentary: true }],
+    });
     await EventModel.updateOne(
       { _id: "christmas", soldCount: { $exists: false } },
-      { $set: { soldCount: paidTicketCount } },
+      { $set: { soldCount: admissionTicketCount } },
     );
   }
 }

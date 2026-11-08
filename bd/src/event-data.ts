@@ -31,11 +31,12 @@ export type AdmissionTicket = {
 
 export type SentAdmissionTicket = Pick<
   AdmissionTicket,
-  "name" | "email" | "ticketTier" | "emailSentAt"
+  "name" | "email" | "ticketTier"
 > & {
   ticketNumber: number;
   isSandbox: boolean;
-  emailSentAt: Date;
+  isComplimentary: boolean;
+  emailSentAt?: Date;
 };
 
 export const defaultChristmasEvent: EventData = {
@@ -207,7 +208,7 @@ export async function getSentAdmissionTicketCount(): Promise<number> {
   await mongooseReady;
   await ensureTicketIndexes();
   return TicketModel.countDocuments({
-    isPaid: true,
+    $or: [{ isPaid: true }, { isComplimentary: true }],
     emailSentAt: { $exists: true },
   });
 }
@@ -218,21 +219,24 @@ export async function getSentAdmissionTickets(): Promise<
   await mongooseReady;
   await ensureTicketIndexes();
   const tickets = await TicketModel.find({
-    isPaid: true,
-    emailSentAt: { $exists: true },
+    $or: [{ isPaid: true }, { isComplimentary: true }],
   })
-    .sort({ emailSentAt: -1 })
-    .select("name email ticketTier ticketNumber stripeSessionId emailSentAt")
+    .sort({ emailSentAt: -1, createdAt: -1 })
+    .select("name email ticketTier ticketNumber stripeSessionId isComplimentary emailSentAt")
     .lean();
   return tickets.map(({ stripeSessionId, ...ticket }) => ({
     ...ticket,
-    isSandbox: stripeSessionId.startsWith("cs_test_"),
+    isComplimentary: ticket.isComplimentary ?? false,
+    isSandbox: stripeSessionId?.startsWith("cs_test_") ?? false,
   }));
 }
 
 export async function clearUnpaidLegacyTickets(): Promise<number> {
   await mongooseReady;
   await ensureTicketIndexes();
-  const result = await TicketModel.deleteMany({ isPaid: { $ne: true } });
+  const result = await TicketModel.deleteMany({
+    isPaid: { $ne: true },
+    isComplimentary: { $ne: true },
+  });
   return result.deletedCount;
 }

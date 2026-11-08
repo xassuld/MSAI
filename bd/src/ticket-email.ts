@@ -30,6 +30,7 @@ export async function sendAdmissionTicket(
   ticketTier: TicketTierName,
   event: EventData,
   amountPaidCents: number,
+  isComplimentary = false,
 ): Promise<void> {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
@@ -63,8 +64,11 @@ export async function sendAdmissionTicket(
     regular: "Regular",
     late: "Late",
   };
-  const ticketType = tierLabels[ticketTier];
+  const ticketType = isComplimentary ? "Complimentary" : tierLabels[ticketTier];
   const ticketPrice = (amountPaidCents / 100).toFixed(2);
+  const paymentDescription = isComplimentary
+    ? "Complimentary admission — no payment required"
+    : `Amount paid: €${ticketPrice}`;
   const safeTicketType = escapeHtml(ticketType);
   const safePartyDescription = escapeHtml(event.partyDescription);
   const frontendUrl = process.env.FRONTEND_URL;
@@ -85,7 +89,7 @@ export async function sendAdmissionTicket(
     `Your admission ticket for ${event.title} is confirmed.`,
     `Ticket code: ${ticketCode}`,
     `Ticket type: ${ticketType}`,
-    `Amount paid: €${ticketPrice}`,
+    paymentDescription,
     `Date: ${date}`,
     `Time: ${time}`,
     `Location: ${location}`,
@@ -136,7 +140,7 @@ export async function sendAdmissionTicket(
         </tr>
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
-      <p style="font-size:14px;line-height:1.6"><strong>Amount paid:</strong> €${ticketPrice}</p>
+      <p style="font-size:14px;line-height:1.6"><strong>${isComplimentary ? "Admission:" : "Amount paid:"}</strong> ${isComplimentary ? "Complimentary — no payment required" : `€${ticketPrice}`}</p>
       <p style="font-size:14px;line-height:1.6"><strong>What&apos;s included:</strong> ${safePartyDescription}</p>
       <p style="font-size:12px"><a href="${ticketUrl}" style="color:#15294b">Open your online ticket and QR code</a></p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
@@ -145,7 +149,7 @@ export async function sendAdmissionTicket(
           <td valign="middle" style="padding:18px 8px 0;text-align:center">
             <p style="margin:0;color:#15294b;font-family:Georgia,serif;font-size:26px;font-weight:bold;line-height:1.2">SEE YOU THERE ❤️</p>
           </td>
-          <td align="center" valign="middle" style="padding:18px 8px 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">€${ticketPrice} PAID</td>
+          <td align="center" valign="middle" style="padding:18px 8px 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">${isComplimentary ? "COMPLIMENTARY" : `€${ticketPrice} PAID`}</td>
         </tr>
       </table>
     </main>

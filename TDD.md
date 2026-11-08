@@ -50,9 +50,14 @@ parsing. Stripe signature verification is required. On
 After commit, Gmail delivers the ticket and an embedded QR code containing the
 public online ticket URL, displayed prominently in the admission pass. Scanning
 the QR code opens the ticket details page. The public online ticket page also
-displays this QR code. Successful delivery sets `emailSentAt`. Failed email
-sends remain retryable through Stripe webhook delivery without creating a
-duplicate ticket. MongoDB transactions require Atlas or a replica set.
+displays this QR code. Successful delivery sets `emailSentAt`. Failed paid
+ticket emails remain retryable through Stripe webhook delivery without creating
+a duplicate ticket. MongoDB transactions require Atlas or a replica set.
+
+Admins can issue complimentary tickets from the ticket recipients page. These
+reserve capacity, are marked complimentary rather than paid, and can be checked
+in. Email delivery failures leave the ticket intact and can be retried from the
+admin ticket list.
 
 The ticket collection is `christmas_admission_tickets`. Email addresses are
 trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.
@@ -66,12 +71,16 @@ updated ticket indexes.
   `soldCount`, `isSoldOut`, and the active tier's name, price, and remaining
   quantity.
 - `POST /api/admin/tickets/check-in` requires the existing authenticated
-  iron-session, and atomically marks a verified paid ticket as checked in.
-  Repeat scans return HTTP 409.
+  iron-session, and atomically marks a verified paid or complimentary ticket
+  as checked in. Repeat scans return HTTP 409.
+- `POST /api/admin/tickets/complimentary` creates and emails a complimentary
+  ticket to the supplied attendee name and email, reserving one capacity spot.
+- `POST /api/admin/tickets/:ticketNumber/resend` retries email delivery for an
+  unsent complimentary ticket.
 - The admin recipient list can delete only the latest, unscanned Sandbox ticket.
   Deletion invalidates that ticket and reopens its last spot without issuing a
   refund; live tickets cannot be deleted through this action.
-- Admin event editing, paid ticket reporting, and event poster upload remain
+- Admin event editing, ticket reporting, and event poster upload remain
   authenticated.
 
 ## Security and operations

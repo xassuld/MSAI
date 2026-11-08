@@ -18,6 +18,7 @@ type TicketData = {
     tier: "earlyBird" | "regular" | "late";
     amountPaidCents: number;
     ticketNumber: number;
+    isComplimentary: boolean;
     qrCodeDataUrl: string;
   };
 };
@@ -55,7 +56,9 @@ export default async function TicketPage({
 
   const data = (await response.json()) as TicketData;
   const { event, ticket } = data;
-  const ticketType = ticketTierLabels[ticket.tier];
+  const ticketType = ticket.isComplimentary
+    ? "Complimentary"
+    : ticketTierLabels[ticket.tier];
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6 sm:py-16">
@@ -79,7 +82,9 @@ export default async function TicketPage({
               {ticketType}
             </p>
             <p className="mt-3 text-sm text-[#d9e1eb]">
-              €{(ticket.amountPaidCents / 100).toFixed(2)} paid
+              {ticket.isComplimentary
+                ? "No payment required"
+                : `€${(ticket.amountPaidCents / 100).toFixed(2)} paid`}
             </p>
           </div>
 
@@ -125,7 +130,8 @@ export default async function TicketPage({
               </p>
               <p className="mt-2 font-semibold">Ticket code: {ticket.code}</p>
               <p className="mt-1 text-[#535044]">
-                Ticket number: {ticket.ticketNumber} · Payment confirmed
+                Ticket number: {ticket.ticketNumber} ·{" "}
+                {ticket.isComplimentary ? "Complimentary admission" : "Payment confirmed"}
               </p>
               <p className="mt-3 text-xs leading-relaxed text-[#535044]">
                 Scan this QR code to open this ticket and view its admission
