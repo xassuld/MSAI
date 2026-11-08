@@ -70,7 +70,8 @@ export async function sendAdmissionTicket(
   const safePartyDescription = escapeHtml(event.partyDescription);
   const safeCashAtGateText = escapeHtml(event.cashAtGateText);
   const eventUrl = "https://msai-eight.vercel.app/events/christmas";
-  const qrCode = await QRCode.toBuffer(ticketCode, {
+  const ticketUrl = `${eventUrl.replace(/\/events\/christmas$/, "")}/tickets/${ticketCode}`;
+  const qrCode = await QRCode.toBuffer(ticketUrl, {
     errorCorrectionLevel: "M",
     margin: 2,
     width: 280,
@@ -150,8 +151,8 @@ export async function sendAdmissionTicket(
             <p style="margin:0;color:#15294b;font-family:Georgia,serif;font-size:26px;font-weight:bold;line-height:1.2">SEE YOU THERE ❤️</p>
           </td>
           <td align="center" valign="middle" style="padding:18px 8px 0">
-            <img src="cid:event-signup-qr" alt="QR code linking to the event page" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
-            <p style="margin:6px 0 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">EVENT INFO</p>
+            <img src="cid:event-signup-qr" alt="QR code opening your ticket details" width="96" height="96" style="display:block;width:96px;height:96px;margin:0 auto">
+            <p style="margin:6px 0 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">OPEN TICKET</p>
           </td>
         </tr>
       </table>

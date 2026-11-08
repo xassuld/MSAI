@@ -195,6 +195,44 @@ app.get("/api/events/christmas", async (_request, response, next) => {
   }
 });
 
+app.get("/api/tickets/:ticketCode", async (request, response, next) => {
+  const ticketCode = request.params.ticketCode?.trim().toUpperCase();
+  if (!ticketCode || !/^[A-Z0-9]{8}$/.test(ticketCode)) {
+    response.status(404).json({ error: "Ticket not found." });
+    return;
+  }
+
+  try {
+    await mongooseReady;
+    const ticket = await TicketModel.findOne({ ticketCode }).lean();
+    if (!ticket) {
+      response.status(404).json({ error: "Ticket not found." });
+      return;
+    }
+
+    const event = await getChristmasEvent();
+    response.set("Cache-Control", "no-store");
+    response.json({
+      event: {
+        title: event.title,
+        date: event.date,
+        time: event.time,
+        location: event.location,
+        posterUrl: event.posterUrl,
+        partyDescription: event.partyDescription,
+        cashAtGateText: event.cashAtGateText,
+      },
+      ticket: {
+        code: ticket.ticketCode,
+        tier: ticket.ticketTier,
+        gatePrice: ticket.gatePrice,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 app.post("/api/events/christmas/registrations", async (request, response, next) => {
   if (!requireSameOrigin(request, response)) return;
 
