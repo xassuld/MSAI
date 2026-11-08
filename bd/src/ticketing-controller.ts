@@ -77,10 +77,7 @@ export async function createCheckoutSession(
     const frontendUrl = process.env.FRONTEND_URL;
     if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
     const baseUrl = new URL(frontendUrl).origin;
-    const checkoutParams: Stripe.Checkout.SessionCreateParams & {
-      payment_method_types: ["card"];
-    } = {
-      payment_method_types: ["card"],
+    const checkoutParams: Stripe.Checkout.SessionCreateParams = {
       line_items: [
         {
           price_data: {
