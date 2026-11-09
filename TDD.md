@@ -77,9 +77,9 @@ updated ticket indexes.
   ticket to the supplied attendee name and email, reserving one capacity spot.
 - `POST /api/admin/tickets/:ticketNumber/resend` retries email delivery for an
   unsent complimentary ticket.
-- The admin recipient list can delete only the latest, unscanned Sandbox ticket.
-  Deletion invalidates that ticket and reopens its last spot without issuing a
-  refund; live tickets cannot be deleted through this action.
+- The admin recipient list can delete the latest unscanned complimentary or
+  Sandbox ticket. Deletion invalidates its code and reopens its last spot; paid
+  live tickets cannot be deleted through this action.
 - Admin event editing, ticket reporting, and event poster upload remain
   authenticated.
 

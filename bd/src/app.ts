@@ -572,7 +572,7 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
     await ensureChristmasEventState(await getChristmasEvent());
     const mongoSession = await mongoose.startSession();
     const outcome: {
-      result: "deleted" | "notFound" | "notSandbox" | "checkedIn" | "notLatest";
+      result: "deleted" | "notFound" | "notEligible" | "checkedIn" | "notLatest";
     } = { result: "notFound" };
 
     try {
@@ -582,8 +582,11 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
           outcome.result = "notFound";
           return;
         }
-        if (!ticket.stripeSessionId?.startsWith("cs_test_")) {
-          outcome.result = "notSandbox";
+        if (
+          !ticket.isComplimentary &&
+          !ticket.stripeSessionId?.startsWith("cs_test_")
+        ) {
+          outcome.result = "notEligible";
           return;
         }
         if (ticket.isCheckedIn) {
@@ -602,11 +605,11 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
         }
 
         const deletion = await TicketModel.deleteOne(
-          { _id: ticket._id, stripeSessionId: ticket.stripeSessionId },
+          { _id: ticket._id },
           { session: mongoSession },
         );
         if (deletion.deletedCount !== 1) {
-          throw new Error("Sandbox test ticket could not be deleted.");
+          throw new Error("Test or complimentary ticket could not be deleted.");
         }
         outcome.result = "deleted";
       });
@@ -618,8 +621,10 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
       response.json({ deleted: true, ticketNumber });
     } else if (outcome.result === "notFound") {
       response.status(404).json({ error: "Ticket not found." });
-    } else if (outcome.result === "notSandbox") {
-      response.status(409).json({ error: "Only Sandbox test tickets can be deleted here." });
+    } else if (outcome.result === "notEligible") {
+      response.status(409).json({
+        error: "Only complimentary or Sandbox test tickets can be deleted here.",
+      });
     } else if (outcome.result === "checkedIn") {
       response.status(409).json({ error: "A checked-in ticket cannot be deleted." });
     } else {

@@ -106,9 +106,10 @@ export default function AdminTicketsPage() {
     }
   }
 
-  async function deleteSandboxTicket(ticket: SentTicketRecipient) {
+  async function deleteRemovableTicket(ticket: SentTicketRecipient) {
+    const ticketKind = ticket.isComplimentary ? "complimentary" : "Sandbox test";
     const confirmed = window.confirm(
-      `Delete Sandbox test ticket #${ticket.ticketNumber} for ${ticket.email}? This will invalidate its ticket code and reopen the last spot. No refund will be issued. Only the latest unscanned Sandbox ticket can be deleted.`,
+      `Delete ${ticketKind} ticket #${ticket.ticketNumber} for ${ticket.email}? This invalidates its ticket code and reopens the last spot. Only the latest unscanned ticket can be deleted.`,
     );
     if (!confirmed) return;
 
@@ -127,11 +128,11 @@ export default function AdminTicketsPage() {
         current?.filter((item) => item.ticketNumber !== ticket.ticketNumber) ?? [],
       );
       setActionMessage(
-        `Sandbox ticket #${ticket.ticketNumber} was deleted. No refund was issued.`,
+        `${ticketKind} ticket #${ticket.ticketNumber} was deleted and its spot reopened.`,
       );
     } catch (cause) {
       setActionMessage(
-        cause instanceof Error ? cause.message : "Could not delete the Sandbox ticket.",
+        cause instanceof Error ? cause.message : `Could not delete the ${ticketKind} ticket.`,
       );
     } finally {
       setDeletingTicketNumber(null);
@@ -192,9 +193,9 @@ export default function AdminTicketsPage() {
           Paid and complimentary tickets are listed with their email status.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
-          Only the latest unscanned Sandbox test ticket can be deleted here.
-          Deleting it invalidates its ticket code and reopens the last spot; no
-          refund is issued. Live tickets cannot be deleted from this page.
+          The latest unscanned complimentary or Sandbox test ticket can be
+          deleted here. Deleting it invalidates the ticket code and reopens its
+          capacity spot. Paid live tickets cannot be deleted from this page.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
@@ -305,8 +306,8 @@ export default function AdminTicketsPage() {
                           {ticket.isComplimentary
                             ? "Complimentary"
                             : ticket.ticketTier
-                            ? ticketTierLabels[ticket.ticketTier]
-                            : "Older ticket"}
+                              ? ticketTierLabels[ticket.ticketTier]
+                              : "Older ticket"}
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[#62645f]">
@@ -322,31 +323,37 @@ export default function AdminTicketsPage() {
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {ticket.isComplimentary && !ticket.emailSentAt ? (
-                          <button
-                            className="rounded-full border border-[#15294b]/30 px-3 py-1.5 text-xs font-semibold hover:bg-[#e8dfcf] disabled:opacity-50"
-                            disabled={resendingTicketNumber !== null}
-                            onClick={() => void resendComplimentaryTicket(ticket)}
-                            type="button"
-                          >
-                            {resendingTicketNumber === ticket.ticketNumber
-                              ? "Sending…"
-                              : "Retry email"}
-                          </button>
-                        ) : ticket.isSandbox ? (
-                          <button
-                            className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
-                            disabled={deletingTicketNumber !== null}
-                            onClick={() => void deleteSandboxTicket(ticket)}
-                            type="button"
-                          >
-                            {deletingTicketNumber === ticket.ticketNumber
-                              ? "Deleting…"
-                              : "Delete test"}
-                          </button>
-                        ) : (
-                          <span className="text-xs text-[#62645f]">Live ticket</span>
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                          {ticket.isComplimentary && !ticket.emailSentAt && (
+                            <button
+                              className="rounded-full border border-[#15294b]/30 px-3 py-1.5 text-xs font-semibold hover:bg-[#e8dfcf] disabled:opacity-50"
+                              disabled={resendingTicketNumber !== null}
+                              onClick={() => void resendComplimentaryTicket(ticket)}
+                              type="button"
+                            >
+                              {resendingTicketNumber === ticket.ticketNumber
+                                ? "Sending…"
+                                : "Retry email"}
+                            </button>
+                          )}
+                          {(ticket.isComplimentary || ticket.isSandbox) && (
+                            <button
+                              className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
+                              disabled={deletingTicketNumber !== null}
+                              onClick={() => void deleteRemovableTicket(ticket)}
+                              type="button"
+                            >
+                              {deletingTicketNumber === ticket.ticketNumber
+                                ? "Deleting…"
+                                : ticket.isComplimentary
+                                  ? "Delete comp"
+                                  : "Delete test"}
+                            </button>
+                          )}
+                          {!ticket.isComplimentary && !ticket.isSandbox && (
+                            <span className="text-xs text-[#62645f]">Live ticket</span>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
