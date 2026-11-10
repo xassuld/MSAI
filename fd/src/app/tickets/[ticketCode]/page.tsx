@@ -60,7 +60,7 @@ export default async function TicketPage({
   const data = (await response.json()) as TicketData;
   const { event, ticket } = data;
   const ticketType = ticket.isComplimentary
-    ? "Complimentary"
+    ? "VIP"
     : ticketTierLabels[ticket.tier];
 
   return (
@@ -80,23 +80,39 @@ export default async function TicketPage({
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-stretch">
             <div>
               <div
-                className={`rounded-2xl px-5 py-7 text-center text-[#fffdf8] ${
-                  ticket.isGateSale ? "bg-[#343a40]" : "bg-[#15294b]"
+                className={`rounded-2xl px-5 py-7 text-center ${
+                  ticket.isComplimentary
+                    ? "bg-[#e4c77e] text-[#15294b]"
+                    : ticket.isGateSale
+                      ? "bg-[#bfdbfe] text-[#15294b]"
+                      : "bg-[#15294b] text-[#fffdf8]"
                 }`}
               >
-                <p className="text-[11px] font-bold uppercase tracking-[.2em] text-[#e4c77e]">
-                  Ticket type
-                </p>
                 <p
-                  className={`mt-2 text-center font-black leading-none tracking-tight ${
-                    ticket.isComplimentary
-                      ? "whitespace-nowrap text-[clamp(1.25rem,7vw,3.75rem)]"
-                      : "text-5xl sm:text-6xl"
+                  className={`text-[11px] font-bold uppercase tracking-[.2em] ${
+                    ticket.isComplimentary || ticket.isGateSale
+                      ? "text-[#15294b]/70"
+                      : "text-[#e4c77e]"
                   }`}
                 >
-                  {ticketType}
+                  Ticket type
                 </p>
-                <p className="mt-3 text-sm text-[#d9e1eb]">
+                {ticket.isComplimentary ? (
+                  <div className="mx-auto mt-3 inline-flex min-w-32 justify-center rounded-full border border-[#15294b]/15 bg-[#f7e8b3] px-8 py-4 text-4xl font-black leading-none tracking-wide text-[#15294b] shadow-sm">
+                    VIP
+                  </div>
+                ) : (
+                  <p className="mt-2 text-center text-5xl font-black leading-none tracking-tight sm:text-6xl">
+                    {ticketType}
+                  </p>
+                )}
+                <p
+                  className={`mt-3 text-sm ${
+                    ticket.isComplimentary || ticket.isGateSale
+                      ? "text-[#15294b]/75"
+                      : "text-[#d9e1eb]"
+                  }`}
+                >
                   {ticket.isComplimentary
                     ? "No payment required"
                     : ticket.isGateSale
@@ -151,7 +167,7 @@ export default async function TicketPage({
               </p>
               <p className="mt-3 text-xs leading-relaxed text-[#535044]">
                 {ticket.isComplimentary
-                  ? "Complimentary admission"
+                  ? "VIP admission"
                   : ticket.isGateSale
                     ? "Cash payment · Entry authorized"
                     : "Payment confirmed"}

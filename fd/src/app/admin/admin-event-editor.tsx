@@ -382,9 +382,9 @@ export default function AdminEventEditor() {
               <div className="mt-5 flex flex-wrap gap-3 border-t border-[#24523c]/15 pt-4">
                 <Link
                   className="inline-flex items-center rounded-full border border-[#24523c]/30 px-4 py-2 text-xs font-semibold text-[#24523c] transition hover:bg-white/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#24523c]"
-                  href="/admin/tickets"
+                  href="/admin/tickets/list"
                 >
-                  View recipients
+                  See list
                 </Link>
                 <button
                   className="inline-flex items-center rounded-full border border-[#923a35]/30 px-4 py-2 text-xs font-semibold text-[#923a35] transition hover:bg-[#f0ded6]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#923a35] disabled:opacity-50"

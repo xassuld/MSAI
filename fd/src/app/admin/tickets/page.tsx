@@ -29,22 +29,10 @@ type TicketPreviewEvent = {
   };
 };
 
-const ticketTierLabels = {
-  earlyBird: "Early Bird",
-  regular: "Regular",
-  late: "Late",
-  atGate: "At-gate · Cash",
-  lateLate: "At-gate · Cash",
-} as const;
-
 export default function AdminTicketsPage() {
   const router = useRouter();
-  const [tickets, setTickets] = useState<SentTicketRecipient[] | null>(null);
   const [error, setError] = useState("");
   const [requiresLogin, setRequiresLogin] = useState(false);
-  const [deletingTicketNumber, setDeletingTicketNumber] = useState<number | null>(
-    null,
-  );
   const [actionMessage, setActionMessage] = useState("");
   const [complimentaryName, setComplimentaryName] = useState("");
   const [complimentaryEmail, setComplimentaryEmail] = useState("");
@@ -60,9 +48,6 @@ export default function AdminTicketsPage() {
     partyDescription: "",
     ticketPrices: { atGate: 2800 },
   });
-  const [resendingTicketNumber, setResendingTicketNumber] = useState<number | null>(
-    null,
-  );
 
   function formatPreviewDate(date: string): string {
     if (!date) return "To be announced";
@@ -70,15 +55,6 @@ export default function AdminTicketsPage() {
       dateStyle: "long",
       timeZone: "UTC",
     }).format(new Date(`${date}T12:00:00Z`));
-  }
-
-  function upsertTicket(ticket: SentTicketRecipient) {
-    setTickets((current) =>
-      [
-        ticket,
-        ...(current ?? []).filter((item) => item.ticketNumber !== ticket.ticketNumber),
-      ].sort((a, b) => b.ticketNumber - a.ticketNumber),
-    );
   }
 
   async function sendComplimentaryTicket(event: FormEvent<HTMLFormElement>) {
@@ -99,7 +75,6 @@ export default function AdminTicketsPage() {
         error?: string;
         ticket?: SentTicketRecipient & { amountPaidCents?: number };
       };
-      if (result.ticket) upsertTicket(result.ticket);
       if (!response.ok) throw new Error(result.error ?? "Could not send complimentary ticket.");
       if (!result.ticket) throw new Error("The server did not return the issued ticket.");
       setComplimentaryName("");
@@ -133,7 +108,6 @@ export default function AdminTicketsPage() {
       };
       if (!response.ok) throw new Error(result.error ?? "Could not issue gate ticket.");
       if (!result.ticket) throw new Error("The server did not return the issued gate ticket.");
-      upsertTicket(result.ticket);
       setGateName("");
       setActionMessage(
         `${new Intl.NumberFormat("en", { style: "currency", currency: "EUR" }).format(
@@ -149,110 +123,21 @@ export default function AdminTicketsPage() {
     }
   }
 
-  async function resendComplimentaryTicket(ticket: SentTicketRecipient) {
-    setResendingTicketNumber(ticket.ticketNumber);
-    setActionMessage("");
-    try {
-      const response = await fetch(
-        `${adminApiUrl}/tickets/${ticket.ticketNumber}/resend`,
-        { method: "POST", credentials: "include" },
-      );
-      const result = (await response.json()) as {
-        error?: string;
-        emailSentAt?: string;
-      };
-      if (!response.ok || !result.emailSentAt) {
-        throw new Error(result.error ?? "Could not resend complimentary ticket.");
-      }
-      upsertTicket({ ...ticket, emailSentAt: result.emailSentAt });
-      setActionMessage(`Ticket #${ticket.ticketNumber} was emailed to ${ticket.email}.`);
-    } catch (cause) {
-      setActionMessage(
-        cause instanceof Error ? cause.message : "Could not resend complimentary ticket.",
-      );
-    } finally {
-      setResendingTicketNumber(null);
-    }
-  }
-
-  async function deleteRemovableTicket(ticket: SentTicketRecipient) {
-    const ticketKind = ticket.isComplimentary
-      ? "complimentary"
-      : ticket.isGateSale
-        ? "cash gate"
-        : ticket.isSandbox
-          ? "Sandbox test"
-          : "paid live";
-    const paidTicketWarning = ticket.isComplimentary
-      ? ""
-      : ticket.isGateSale
-        ? " This invalidates the ticket; no cash refund will be issued."
-        : " Its ticket will be invalidated and the paid capacity spot reopened. No refund will be issued.";
-    const confirmed = window.confirm(
-      `Delete ${ticketKind} ticket #${ticket.ticketNumber} for ${ticket.email ?? ticket.name}? This invalidates its ticket code.${paidTicketWarning}`,
-    );
-    if (!confirmed) return;
-
-    setDeletingTicketNumber(ticket.ticketNumber);
-    setActionMessage("");
-    try {
-      const response = await fetch(
-        `${adminApiUrl}/tickets/${ticket.ticketNumber}`,
-        { method: "DELETE", credentials: "include" },
-      );
-      const result = (await response.json()) as { error?: string; deleted?: boolean };
-      if (!response.ok || result.deleted !== true) {
-        throw new Error(result.error ?? "Could not delete the Sandbox ticket.");
-      }
-      setTickets((current) =>
-        current?.filter((item) => item.ticketNumber !== ticket.ticketNumber) ?? [],
-      );
-      setActionMessage(
-        `${ticketKind} ticket #${ticket.ticketNumber} was deleted.${
-          ticket.isComplimentary
-            ? ""
-            : ticket.isGateSale
-              ? " No cash refund was issued."
-              : " Its paid capacity spot was reopened; no refund was issued."
-        }`,
-      );
-    } catch (cause) {
-      setActionMessage(
-        cause instanceof Error ? cause.message : `Could not delete the ${ticketKind} ticket.`,
-      );
-    } finally {
-      setDeletingTicketNumber(null);
-    }
-  }
-
   useEffect(() => {
     let active = true;
 
-    Promise.all([
-      fetch(`${adminApiUrl}/tickets`, {
-        cache: "no-store",
-        credentials: "include",
-      }),
-      fetch(`${adminApiUrl}/events/christmas`, {
-        cache: "no-store",
-        credentials: "include",
-      }),
-    ])
-      .then(async ([ticketsResponse, eventResponse]) => {
-        const [ticketsResult, eventResult] = (await Promise.all([
-          ticketsResponse.json(),
-          eventResponse.json(),
-        ])) as [
-          { error?: string; sentTickets?: SentTicketRecipient[] },
-          Partial<TicketPreviewEvent> & { error?: string },
-        ];
+    fetch(`${adminApiUrl}/events/christmas`, {
+      cache: "no-store",
+      credentials: "include",
+    })
+      .then(async (eventResponse) => {
+        const eventResult = (await eventResponse.json()) as Partial<TicketPreviewEvent> & {
+          error?: string;
+        };
 
-        if (ticketsResponse.status === 401 || eventResponse.status === 401) {
+        if (eventResponse.status === 401) {
           if (active) setRequiresLogin(true);
           return;
-        }
-        if (!ticketsResponse.ok || !Array.isArray(ticketsResult.sentTickets)) {
-          throw new Error(ticketsResult.error ?? "Could not load ticket recipients.");
         }
         if (
           !eventResponse.ok ||
@@ -266,7 +151,6 @@ export default function AdminTicketsPage() {
           throw new Error(eventResult.error ?? "Could not load ticket preview details.");
         }
         if (active) {
-          setTickets(ticketsResult.sentTickets);
           setPreviewEvent({
             title: eventResult.title,
             date: eventResult.date,
@@ -317,31 +201,40 @@ export default function AdminTicketsPage() {
               MSAI · Admin
             </p>
             <h1 className="mt-2 font-serif text-3xl text-[#15294b]">
-              Ticket recipients
+              Ticket tools
             </h1>
             <p className="mt-2 text-sm text-[#62645f]">
-              Paid and complimentary tickets are listed with their email status.
+              Issue tickets or browse attendee records.
             </p>
           </div>
+          <Link
+            className="inline-flex shrink-0 items-center justify-center rounded-full bg-[#15294b] px-5 py-3 text-sm font-semibold text-[#fffdf8] transition hover:bg-[#263d75] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#15294b]"
+            href="/admin/tickets/list"
+          >
+            See list
+          </Link>
         </div>
         <AdminNavigation active="recipients" />
         <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
-          Any ticket can be deleted here. Deleting a paid ticket invalidates it
-          and reopens its capacity spot without issuing a refund. Complimentary
-          tickets do not affect paid capacity.
+          Tickets can be deleted from the recipient list. Deleting a paid ticket
+          invalidates it and reopens its capacity spot without issuing a refund.
+          Complimentary tickets do not affect paid capacity.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
-          <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
+          <span className="rounded-full border border-[#dce5d6] bg-[#dce5d6] px-3 py-1 text-[#15294b]">
             Green · Early Bird
           </span>
-          <span className="rounded-full bg-[#ebe1cd] px-3 py-1 text-[#71572e]">
+          <span className="rounded-full border border-[#ebe1cd] bg-[#ebe1cd] px-3 py-1 text-[#15294b]">
             Yellow · Regular
           </span>
-          <span className="rounded-full bg-[#f0ded6] px-3 py-1 text-[#923a35]">
+          <span className="rounded-full border border-[#f0ded6] bg-[#f0ded6] px-3 py-1 text-[#15294b]">
             Red · Late
           </span>
-          <span className="rounded-full bg-[#343a40] px-3 py-1 text-white">
-            Charcoal · At-gate
+          <span className="rounded-full border border-[#e4c77e] bg-[#e4c77e] px-3 py-1 text-[#15294b]">
+            Golden yellow · VIP
+          </span>
+          <span className="rounded-full border border-[#bfdbfe] bg-[#bfdbfe] px-3 py-1 text-[#15294b]">
+            Light blue · At-gate
           </span>
         </div>
 
@@ -509,108 +402,9 @@ export default function AdminTicketsPage() {
               {actionMessage}
             </p>
           )}
-          {requiresLogin ? (
-            <p className="rounded-xl bg-[#f0ded6] px-4 py-3 text-sm text-[#923a35]">
-              Please <Link className="font-semibold underline" href="/admin">sign in</Link>{" "}
-              to view ticket recipients.
-            </p>
-          ) : error ? (
+          {error && (
             <p className="rounded-xl bg-[#f0ded6] px-4 py-3 text-sm text-[#923a35]" role="alert">
               {error}
-            </p>
-          ) : tickets === null ? (
-            <p className="py-8 text-center text-sm text-[#62645f]" role="status">
-              Loading ticket recipients…
-            </p>
-          ) : tickets.length ? (
-            <div className="overflow-x-auto rounded-2xl border border-[#c7b995]/80">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="bg-[#e8dfcf] text-[10px] uppercase tracking-[.12em] text-[#80643a]">
-                  <tr>
-                    <th className="px-4 py-3 font-bold">Name</th>
-                    <th className="px-4 py-3 font-bold">Email</th>
-                    <th className="px-4 py-3 font-bold">Ticket type</th>
-                    <th className="px-4 py-3 font-bold">Last emailed</th>
-                    <th className="px-4 py-3 font-bold">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#c7b995]/60">
-                  {tickets.map((ticket) => (
-                    <tr className="bg-[#fffdf8]/70" key={ticket.ticketNumber}>
-                      <td className="px-4 py-3 font-semibold">{ticket.name}</td>
-                      <td className="break-all px-4 py-3">
-                        {ticket.email ?? (ticket.isGateSale ? "Cash at gate" : "—")}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
-                            ticket.ticketTier === "earlyBird"
-                              ? "bg-[#dce5d6] text-[#24523c]"
-                              : ticket.ticketTier === "regular"
-                                ? "bg-[#ebe1cd] text-[#71572e]"
-                                : ticket.ticketTier === "late"
-                                    ? "bg-[#f0ded6] text-[#923a35]"
-                                    : ticket.ticketTier === "atGate" ||
-                                        ticket.ticketTier === "lateLate"
-                                      ? "bg-[#343a40] text-white"
-                                    : "bg-[#e8dfcf] text-[#62645f]"
-                          }`}
-                        >
-                          {ticket.isComplimentary
-                            ? "Complimentary"
-                            : ticket.ticketTier
-                              ? ticketTierLabels[ticket.ticketTier]
-                              : "Older ticket"}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-[#62645f]">
-                        {ticket.isGateSale ? (
-                          "Cash · admitted"
-                        ) : ticket.emailSentAt ? (
-                          <time dateTime={ticket.emailSentAt}>
-                            {new Intl.DateTimeFormat("en", {
-                              dateStyle: "medium",
-                              timeStyle: "short",
-                            }).format(new Date(ticket.emailSentAt))}
-                          </time>
-                        ) : (
-                          "Email not sent"
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          {ticket.isComplimentary && !ticket.emailSentAt && (
-                            <button
-                              className="rounded-full border border-[#15294b]/30 px-3 py-1.5 text-xs font-semibold hover:bg-[#e8dfcf] disabled:opacity-50"
-                              disabled={resendingTicketNumber !== null}
-                              onClick={() => void resendComplimentaryTicket(ticket)}
-                              type="button"
-                            >
-                              {resendingTicketNumber === ticket.ticketNumber
-                                ? "Sending…"
-                                : "Retry email"}
-                            </button>
-                          )}
-                          <button
-                            className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
-                            disabled={deletingTicketNumber !== null}
-                            onClick={() => void deleteRemovableTicket(ticket)}
-                            type="button"
-                          >
-                            {deletingTicketNumber === ticket.ticketNumber
-                              ? "Deleting…"
-                              : "Delete ticket"}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="rounded-xl bg-[#dce5d6] px-4 py-3 text-sm text-[#24523c]">
-              No tickets have been emailed yet.
             </p>
           )}
         </div>

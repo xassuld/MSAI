@@ -104,7 +104,8 @@ export async function sendAdmissionTicket(
     `Event page: ${eventUrl}`,
     "",
     "Please show this email or your ticket code at the event.",
-    "Mongolian Students' Association in Italy",
+    "",
+    "See you there ❤️",
   ].join("\n");
   const html = `<!doctype html>
 <html lang="en">
@@ -150,10 +151,9 @@ export async function sendAdmissionTicket(
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:24px;border-top:1px solid #c7b995">
         <tr>
-          <td valign="middle" style="padding:18px 8px 0;text-align:center">
+          <td colspan="2" valign="middle" style="padding:18px 8px 0;text-align:center">
             <p style="margin:0;color:#15294b;font-family:Georgia,serif;font-size:26px;font-weight:bold;line-height:1.2">SEE YOU THERE ❤️</p>
           </td>
-          <td align="center" valign="middle" style="padding:18px 8px 0;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">${isComplimentary ? "COMPLIMENTARY" : `€${ticketPrice} PAID`}</td>
         </tr>
       </table>
     </main>
