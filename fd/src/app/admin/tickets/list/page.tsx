@@ -34,6 +34,8 @@ export default function AdminTicketListPage() {
   const [deletingTicketNumber, setDeletingTicketNumber] = useState<number | null>(
     null,
   );
+  const [ticketPendingDeletion, setTicketPendingDeletion] =
+    useState<SentTicketRecipient | null>(null);
   const [resendingTicketNumber, setResendingTicketNumber] = useState<number | null>(
     null,
   );
@@ -119,15 +121,6 @@ export default function AdminTicketListPage() {
         : ticket.isSandbox
           ? "Sandbox test"
           : "paid live";
-    const capacityWarning = ticket.isComplimentary
-      ? ""
-      : ticket.isGateSale
-        ? " This invalidates the ticket; no cash refund will be issued."
-        : " Its ticket will be invalidated and the paid capacity spot reopened. No refund will be issued.";
-    const confirmed = window.confirm(
-      `Delete ${ticketKind} ticket #${ticket.ticketNumber} for ${ticket.email ?? ticket.name}? This invalidates its ticket code.${capacityWarning}`,
-    );
-    if (!confirmed) return;
 
     setDeletingTicketNumber(ticket.ticketNumber);
     setActionMessage("");
@@ -370,7 +363,7 @@ export default function AdminTicketListPage() {
                         <button
                           className="whitespace-nowrap rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
                           disabled={deletingTicketNumber !== null}
-                          onClick={() => void deleteTicket(ticket)}
+                          onClick={() => setTicketPendingDeletion(ticket)}
                           type="button"
                         >
                           {deletingTicketNumber === ticket.ticketNumber
@@ -386,6 +379,51 @@ export default function AdminTicketListPage() {
           </div>
         )}
       </section>
+      {ticketPendingDeletion && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[#15294b]/55 p-4">
+          <section
+            aria-describedby="delete-ticket-description"
+            aria-labelledby="delete-ticket-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-2xl border border-[#c7b995] bg-[#f3ecdf] p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/25%)]"
+            role="alertdialog"
+          >
+            <h2 className="font-serif text-2xl" id="delete-ticket-title">
+              Are you sure you want to delete this ticket?
+            </h2>
+            <p className="mt-3 text-sm text-[#62645f]" id="delete-ticket-description">
+              Delete ticket #{ticketPendingDeletion.ticketNumber} for{" "}
+              {ticketPendingDeletion.email ?? ticketPendingDeletion.name}? This
+              invalidates its ticket code
+              {ticketPendingDeletion.isComplimentary
+                ? "."
+                : ticketPendingDeletion.isGateSale
+                  ? "; no cash refund will be issued."
+                  : " and reopens its paid capacity spot. No refund will be issued."}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="rounded-full border border-[#15294b]/30 px-4 py-2 text-sm font-semibold transition hover:bg-[#e8dfcf] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#15294b]"
+                onClick={() => setTicketPendingDeletion(null)}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="rounded-full bg-[#923a35] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#7b302c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#923a35]"
+                onClick={() => {
+                  const ticket = ticketPendingDeletion;
+                  setTicketPendingDeletion(null);
+                  void deleteTicket(ticket);
+                }}
+                type="button"
+              >
+                Delete ticket
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   );
 }
