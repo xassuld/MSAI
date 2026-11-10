@@ -143,10 +143,6 @@ export default function AdminTicketListPage() {
       if (!response.ok || result.deleted !== true) {
         throw new Error(result.error ?? "Could not delete the ticket.");
       }
-      setTickets(
-        (current) =>
-          current?.filter((item) => item.ticketNumber !== ticket.ticketNumber) ?? [],
-      );
       setActionMessage(
         `${ticketKind} ticket #${ticket.ticketNumber} was deleted.${
           ticket.isComplimentary
@@ -156,6 +152,26 @@ export default function AdminTicketListPage() {
               : " Its paid capacity spot was reopened; no refund was issued."
         }`,
       );
+      try {
+        const ticketsResponse = await fetch(`${adminApiUrl}/tickets`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+        const ticketsResult = (await ticketsResponse.json()) as {
+          error?: string;
+          sentTickets?: SentTicketRecipient[];
+        };
+        if (!ticketsResponse.ok || !Array.isArray(ticketsResult.sentTickets)) {
+          throw new Error(ticketsResult.error ?? "Could not refresh the ticket list.");
+        }
+        setTickets(ticketsResult.sentTickets);
+      } catch (cause) {
+        setError(
+          cause instanceof Error
+            ? `Ticket deleted, but the list could not be refreshed: ${cause.message}`
+            : "Ticket deleted, but the list could not be refreshed.",
+        );
+      }
     } catch (cause) {
       setActionMessage(
         cause instanceof Error ? cause.message : `Could not delete the ${ticketKind} ticket.`,
@@ -204,8 +220,8 @@ export default function AdminTicketListPage() {
           <div>
             <h2 className="font-serif text-xl">All ticket holders</h2>
             <p className="mt-1 text-xs text-[#62645f]">
-              List numbers stay sequential after deletions; ticket IDs remain
-              permanent for QR codes and records.
+              Ticket numbers compact after deletions. Delete or retry an email
+              using the actions in each row.
             </p>
           </div>
           {tickets && (
@@ -260,11 +276,10 @@ export default function AdminTicketListPage() {
           </p>
         ) : (
           <div className="max-h-[72vh] overflow-auto rounded-2xl border border-[#c7b995] bg-[#fffdf8]/70">
-            <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
               <thead className="sticky top-0 z-10 bg-[#e8dfcf] text-[10px] uppercase tracking-[.12em] text-[#80643a] shadow-[0_1px_0_#c7b995]">
                 <tr>
-                  <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">List #</th>
-                  <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">Ticket ID</th>
+                  <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">Ticket #</th>
                   <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">Name</th>
                   <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">Email</th>
                   <th className="border border-[#c7b995]/70 px-4 py-3 font-bold">Ticket type</th>
@@ -274,15 +289,12 @@ export default function AdminTicketListPage() {
                 </tr>
               </thead>
               <tbody>
-                {tickets.map((ticket, index) => (
+                {tickets.map((ticket) => (
                   <tr
                     className="bg-[#fffdf8]/70 transition-colors hover:bg-[#e8dfcf]/60"
                     key={ticket.ticketNumber}
                   >
                     <td className="whitespace-nowrap border border-[#c7b995]/60 px-4 py-3 font-mono text-xs font-semibold">
-                      {index + 1}
-                    </td>
-                    <td className="whitespace-nowrap border border-[#c7b995]/60 px-4 py-3 font-mono text-xs text-[#62645f]">
                       {ticket.ticketNumber}
                     </td>
                     <td className="min-w-40 border border-[#c7b995]/60 px-4 py-3 font-semibold">

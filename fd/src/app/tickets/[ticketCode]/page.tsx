@@ -82,43 +82,43 @@ export default async function TicketPage({
               <div
                 className={`rounded-2xl px-5 py-7 text-center ${
                   ticket.isComplimentary
-                    ? "bg-[#e4c77e] text-[#15294b]"
+                    ? "flex min-h-64 items-center justify-center bg-[#e4c77e] text-[#15294b]"
                     : ticket.isGateSale
                       ? "bg-[#bfdbfe] text-[#15294b]"
                       : "bg-[#15294b] text-[#fffdf8]"
                 }`}
               >
-                <p
-                  className={`text-[11px] font-bold uppercase tracking-[.2em] ${
-                    ticket.isComplimentary || ticket.isGateSale
-                      ? "text-[#15294b]/70"
-                      : "text-[#e4c77e]"
-                  }`}
-                >
-                  Ticket type
-                </p>
                 {ticket.isComplimentary ? (
-                  <div className="mx-auto mt-3 inline-flex min-w-32 justify-center rounded-full border border-[#15294b]/15 bg-[#f7e8b3] px-8 py-4 text-4xl font-black leading-none tracking-wide text-[#15294b] shadow-sm">
+                  <p className="font-serif text-6xl font-semibold leading-none tracking-[.16em] sm:text-7xl">
                     VIP
-                  </div>
-                ) : (
-                  <p className="mt-2 text-center text-5xl font-black leading-none tracking-tight sm:text-6xl">
-                    {ticketType}
                   </p>
+                ) : (
+                  <>
+                    <p
+                      className={`text-[11px] font-bold uppercase tracking-[.2em] ${
+                        ticket.isGateSale
+                          ? "text-[#15294b]/70"
+                          : "text-[#e4c77e]"
+                      }`}
+                    >
+                      Ticket type
+                    </p>
+                    <p className="mt-2 text-center text-5xl font-black leading-none tracking-tight sm:text-6xl">
+                      {ticketType}
+                    </p>
+                    <p
+                      className={`mt-3 text-sm ${
+                        ticket.isGateSale
+                          ? "text-[#15294b]/75"
+                          : "text-[#d9e1eb]"
+                      }`}
+                    >
+                      {ticket.isGateSale
+                        ? "€28 cash · paid at gate"
+                        : `€${(ticket.amountPaidCents / 100).toFixed(2)} paid`}
+                    </p>
+                  </>
                 )}
-                <p
-                  className={`mt-3 text-sm ${
-                    ticket.isComplimentary || ticket.isGateSale
-                      ? "text-[#15294b]/75"
-                      : "text-[#d9e1eb]"
-                  }`}
-                >
-                  {ticket.isComplimentary
-                    ? "No payment required"
-                    : ticket.isGateSale
-                      ? "€28 cash · paid at gate"
-                      : `€${(ticket.amountPaidCents / 100).toFixed(2)} paid`}
-                </p>
               </div>
 
               <div className="mt-7 grid gap-5 sm:grid-cols-2">

@@ -727,6 +727,29 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
         if (deletion.deletedCount !== 1) {
           throw new Error("Test or complimentary ticket could not be deleted.");
         }
+
+        const remainingTickets = await TicketModel.find({
+          $or: [{ isPaid: true }, { isComplimentary: true }],
+        })
+          .sort({ ticketNumber: 1, _id: 1 })
+          .select("_id ticketNumber")
+          .session(mongoSession)
+          .lean();
+        for (const [index, remainingTicket] of remainingTickets.entries()) {
+          const nextTicketNumber = index + 1;
+          if (remainingTicket.ticketNumber !== nextTicketNumber) {
+            await TicketModel.updateOne(
+              { _id: remainingTicket._id },
+              { $set: { ticketNumber: nextTicketNumber } },
+              { session: mongoSession },
+            );
+          }
+        }
+        await EventModel.updateOne(
+          { _id: "christmas" },
+          { $set: { ticketCount: remainingTickets.length } },
+          { session: mongoSession },
+        );
         outcome.result = "deleted";
       });
     } finally {
