@@ -31,7 +31,7 @@ export default function AdminNavigation({
       if (!response.ok) throw new Error("Could not sign out. Please retry.");
       // Reload to discard cached authenticated state from any admin section.
       // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-      window.location.href = "/admin";
+      window.location.href = "/";
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not sign out.");
     } finally {
