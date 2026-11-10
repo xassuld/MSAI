@@ -124,18 +124,16 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
           isPaid: true,
           stripeSessionId: { $not: /^cs_test_/ },
         };
-        const [paidTicketCount, onlinePaidTicketCount, gateSaleCount] =
-          await Promise.all([
-            TicketModel.countDocuments(realPaidFilter).session(session),
-            TicketModel.countDocuments({
-              ...realPaidFilter,
-              paymentMethod: { $ne: "cash" },
-            }).session(session),
-            TicketModel.countDocuments({
-              isPaid: true,
-              paymentMethod: "cash",
-            }).session(session),
-          ]);
+        const paidTicketCount = await TicketModel.countDocuments(realPaidFilter)
+          .session(session);
+        const onlinePaidTicketCount = await TicketModel.countDocuments({
+          ...realPaidFilter,
+          paymentMethod: { $ne: "cash" },
+        }).session(session);
+        const gateSaleCount = await TicketModel.countDocuments({
+          isPaid: true,
+          paymentMethod: "cash",
+        }).session(session);
         const migrated = await EventModel.updateOne(
           {
             _id: "christmas",

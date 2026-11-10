@@ -150,11 +150,18 @@ export default function AdminEventEditor() {
           credentials: "include",
         },
       );
+      const eventResult = (await eventResponse.json()) as
+        | EventFields
+        | { error?: string };
       if (!eventResponse.ok) {
-        throw new Error("Signed in, but could not load the event. Refresh to retry.");
+        throw new Error(
+          "error" in eventResult && eventResult.error
+            ? `Signed in, but could not load the event: ${eventResult.error}`
+            : `Signed in, but could not load the event (HTTP ${eventResponse.status}). Refresh to retry.`,
+        );
       }
 
-      setEvent((await eventResponse.json()) as EventFields);
+      setEvent(eventResult as EventFields);
       setAuthenticated(true);
       setPassword("");
       setMessage("");
