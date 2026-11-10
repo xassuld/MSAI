@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type AdminSection = "details" | "recipients" | "prices";
 const adminApiUrl = "/api/admin";
@@ -19,38 +19,8 @@ export default function AdminNavigation({
   active: AdminSection;
 }) {
   const router = useRouter();
-  const [authenticated, setAuthenticated] = useState(false);
-  const [checkingSession, setCheckingSession] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    fetch(`${adminApiUrl}/events/christmas`, {
-      cache: "no-store",
-      credentials: "include",
-    })
-      .then((response) => {
-        if (!active) return;
-        if (response.status === 401) return;
-        if (!response.ok) throw new Error("Could not check the admin session.");
-        setAuthenticated(true);
-      })
-      .catch((cause: unknown) => {
-        if (active) {
-          setError(
-            cause instanceof Error ? cause.message : "Could not check the admin session.",
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setCheckingSession(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
 
   async function handleSignOut() {
     setSigningOut(true);
@@ -61,7 +31,6 @@ export default function AdminNavigation({
         credentials: "include",
       });
       if (!response.ok) throw new Error("Could not sign out. Please retry.");
-      setAuthenticated(false);
       router.push("/admin");
       router.refresh();
     } catch (cause) {
@@ -91,16 +60,14 @@ export default function AdminNavigation({
             {section.label}
           </Link>
         ))}
-        {!checkingSession && authenticated && (
-          <button
-            className="ml-auto rounded-full border border-[#923a35]/30 px-4 py-2 text-xs font-semibold text-[#923a35] transition hover:bg-[#f0ded6]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#923a35] disabled:opacity-50"
-            disabled={signingOut}
-            onClick={() => void handleSignOut()}
-            type="button"
-          >
-            {signingOut ? "Signing out…" : "Sign out"}
-          </button>
-        )}
+        <button
+          className="ml-auto rounded-full border border-[#923a35]/30 px-4 py-2 text-xs font-semibold text-[#923a35] transition hover:bg-[#f0ded6]/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#923a35] disabled:opacity-50"
+          disabled={signingOut}
+          onClick={() => void handleSignOut()}
+          type="button"
+        >
+          {signingOut ? "Signing out…" : "Sign out"}
+        </button>
       </nav>
       {error && (
         <p aria-live="polite" className="mt-2 text-xs text-[#923a35]" role="alert">
