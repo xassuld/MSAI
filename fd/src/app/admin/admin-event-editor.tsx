@@ -315,7 +315,7 @@ export default function AdminEventEditor() {
           </div>
         </div>
 
-        <AdminNavigation active="details" />
+        {authenticated && <AdminNavigation active="details" />}
 
         {checkingSession ? (
           <p aria-live="polite" className="py-8 text-center text-sm text-[#62645f]">
