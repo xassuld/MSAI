@@ -214,6 +214,15 @@ export async function getSentAdmissionTicketCount(): Promise<number> {
   });
 }
 
+export async function getPaidAdmissionTicketCount(): Promise<number> {
+  await mongooseReady;
+  await ensureTicketIndexes();
+  return TicketModel.countDocuments({
+    isPaid: true,
+    stripeSessionId: { $not: /^cs_test_/ },
+  });
+}
+
 export async function getSentAdmissionTickets(): Promise<
   SentAdmissionTicket[]
 > {

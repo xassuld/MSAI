@@ -12,6 +12,7 @@ const eventSchema = new Schema(
     gateSaleCount: { type: Number, required: true, min: 0, default: 0 },
     ticketCount: { type: Number, required: true, min: 0, default: 0 },
     countersInitialized: { type: Boolean, required: true, default: false },
+    sandboxSalesExcluded: { type: Boolean, required: true, default: false },
     tierCaps: {
       earlyBird: { type: Number, required: true, min: 0, default: 20 },
       regular: { type: Number, required: true, min: 0, default: 55 },

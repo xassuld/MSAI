@@ -200,6 +200,7 @@ export async function handleStripeWebhook(
   const email = metadata.email.trim().toLowerCase();
   const name = metadata.name.trim().replace(/\s+/g, " ");
   const amountPaidCents = checkoutSession.amount_total!;
+  const isSandbox = checkoutSession.id.startsWith("cs_test_");
   let mongoSession: mongoose.ClientSession | undefined;
   try {
     await mongooseReady;
@@ -221,15 +222,21 @@ export async function handleStripeWebhook(
         return;
       }
 
-      const updatedEvent = await EventModel.findOneAndUpdate(
-        {
-          _id: "christmas",
-          soldCount: { $lt: totalTicketLimit },
-          onlineSoldCount: { $lt: onlineTicketLimit },
-        },
-        { $inc: { soldCount: 1, onlineSoldCount: 1, ticketCount: 1 } },
-        { new: true, session: activeSession },
-      );
+      const updatedEvent = isSandbox
+        ? await EventModel.findOneAndUpdate(
+            { _id: "christmas" },
+            { $inc: { ticketCount: 1 } },
+            { new: true, session: activeSession },
+          )
+        : await EventModel.findOneAndUpdate(
+            {
+              _id: "christmas",
+              soldCount: { $lt: totalTicketLimit },
+              onlineSoldCount: { $lt: onlineTicketLimit },
+            },
+            { $inc: { soldCount: 1, onlineSoldCount: 1, ticketCount: 1 } },
+            { new: true, session: activeSession },
+          );
       if (!updatedEvent) {
         fulfillment.overCapacity = true;
         return;

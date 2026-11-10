@@ -33,6 +33,9 @@ and 20. Online checkout increments the online and total paid counts; gate sales
 increment the gate and total paid counts. `ticketCount` allocates unique
 sequential numbers to all tickets. Checkout creation never reserves a ticket
 or increments counts. Online checkout closes at 100 online paid tickets.
+Stripe test-mode (`cs_test_`) tickets receive ticket numbers for testing but
+never consume paid capacity or appear in the paid sales count. Existing counts
+are reconciled to exclude Sandbox tickets during event-state initialization.
 Attempts to start checkout after that return HTTP 409.
 If more paid sessions complete than remaining spots, the webhook transaction
 will reject the excess ticket and refund that payment.
@@ -48,8 +51,9 @@ parsing. Stripe signature verification is required. On
 `checkout.session.completed`, a MongoDB transaction:
 
 1. Checks the unique Stripe session ID for an existing ticket.
-2. Atomically increments total paid count and online paid count only when
-   online sales are below 100 and total attendance is below 120.
+2. For live sessions, atomically increments total paid count and online paid
+   count only when online sales are below 100 and total attendance is below
+   120. Test-mode sessions only increment the ticket number.
 3. Creates a paid ticket with a unique eight-character code, sequential ticket
    number, tier, amount, and Stripe identifiers.
 
@@ -89,6 +93,9 @@ indexes when initializing the updated ticket indexes.
   total `soldCount`, online and At-gate tickets remaining, `isSoldOut`, and the
   active online tier's name, price, and remaining quantity, plus all ticket
   prices in cents.
+- Public and admin event endpoints calculate `soldCount` from paid ticket
+  recipients, excluding complimentary tickets and Stripe test-mode sessions,
+  so the displayed count matches the paid recipients list.
 - `PUT /api/admin/ticket-prices` updates all ticket prices in cents and
   requires the existing authenticated iron-session.
 - `POST /api/admin/tickets/check-in` requires the existing authenticated

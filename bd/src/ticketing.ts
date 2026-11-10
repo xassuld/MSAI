@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import mongoose from "mongoose";
 import { mongooseReady } from "./mongoose.js";
 import { ensureTicketIndexes, EventModel, TicketModel } from "./models.js";
 import type { EventData } from "./event-data.js";
@@ -110,4 +111,58 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       { $set: { gateSaleCount } },
     ),
   ]);
+
+  const sandboxMigrationNeeded = await EventModel.exists({
+    _id: "christmas",
+    sandboxSalesExcluded: { $ne: true },
+  });
+  if (sandboxMigrationNeeded) {
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const realPaidFilter = {
+          isPaid: true,
+          stripeSessionId: { $not: /^cs_test_/ },
+        };
+        const [paidTicketCount, onlinePaidTicketCount, gateSaleCount] =
+          await Promise.all([
+            TicketModel.countDocuments(realPaidFilter).session(session),
+            TicketModel.countDocuments({
+              ...realPaidFilter,
+              paymentMethod: { $ne: "cash" },
+            }).session(session),
+            TicketModel.countDocuments({
+              isPaid: true,
+              paymentMethod: "cash",
+            }).session(session),
+          ]);
+        const migrated = await EventModel.updateOne(
+          {
+            _id: "christmas",
+            sandboxSalesExcluded: { $ne: true },
+          },
+          {
+            $set: {
+              soldCount: paidTicketCount,
+              onlineSoldCount: onlinePaidTicketCount,
+              gateSaleCount,
+              sandboxSalesExcluded: true,
+            },
+          },
+          { session },
+        );
+        if (migrated.modifiedCount !== 1) {
+          const eventState = await EventModel.findById("christmas")
+            .select("sandboxSalesExcluded")
+            .session(session)
+            .lean();
+          if (!eventState?.sandboxSalesExcluded) {
+            throw new Error("Could not reconcile Sandbox ticket counts.");
+          }
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
 }

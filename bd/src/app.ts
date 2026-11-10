@@ -11,6 +11,7 @@ import express, {
 import { getAllowedOrigins, validateEnvironment } from "./env.js";
 import {
   getChristmasEvent,
+  getPaidAdmissionTicketCount,
   getSentAdmissionTicketCount,
   getSentAdmissionTickets,
   getLoginRetryAfter,
@@ -182,7 +183,7 @@ app.get("/api/events/christmas", async (_request, response, next) => {
     const registrationState = await EventModel.findById("christmas")
       .select("soldCount onlineSoldCount gateSaleCount ticketCount ticketPrices")
       .lean();
-    const soldCount = registrationState?.soldCount ?? 0;
+    const soldCount = await getPaidAdmissionTicketCount();
     const onlineSoldCount = registrationState?.onlineSoldCount ?? 0;
     const gateSaleCount = registrationState?.gateSaleCount ?? 0;
     const ticketCount = registrationState?.ticketCount ?? 0;
@@ -341,7 +342,7 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
     const registrationState = await EventModel.findById("christmas")
       .select("soldCount onlineSoldCount gateSaleCount ticketCount ticketPrices")
       .lean();
-    const soldCount = registrationState?.soldCount ?? 0;
+    const soldCount = await getPaidAdmissionTicketCount();
     response.set("Cache-Control", "no-store");
     response.json({
       ...event,
@@ -696,7 +697,8 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
           return;
         }
 
-        if (ticket.isPaid) {
+        const isSandbox = ticket.stripeSessionId?.startsWith("cs_test_") ?? false;
+        if (ticket.isPaid && !isSandbox) {
           const ticketCounterUpdate =
             ticket.paymentMethod === "cash"
               ? { soldCount: -1, gateSaleCount: -1 }
