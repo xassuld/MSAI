@@ -292,15 +292,21 @@ export default function AdminTicketsPage() {
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">
-      <section className="mx-auto w-full max-w-[760px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
+      <section className="mx-auto w-full max-w-[620px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
+        <div className="mb-7 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#80643a]">
+              MSAI · Admin
+            </p>
+            <h1 className="mt-2 font-serif text-3xl text-[#15294b]">
+              Ticket recipients
+            </h1>
+            <p className="mt-2 text-sm text-[#62645f]">
+              Paid and complimentary tickets are listed with their email status.
+            </p>
+          </div>
+        </div>
         <AdminNavigation active="recipients" />
-        <p className="mt-8 text-[10px] font-bold uppercase tracking-[.2em] text-[#80643a]">
-          MSAI · Admin
-        </p>
-        <h1 className="mt-2 font-serif text-3xl">Ticket recipients</h1>
-        <p className="mt-2 text-sm text-[#62645f]">
-          Paid and complimentary tickets are listed with their email status.
-        </p>
         <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
           Any ticket can be deleted here. Deleting a paid ticket invalidates it
           and reopens its capacity spot without issuing a refund. Complimentary

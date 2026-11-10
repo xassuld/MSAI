@@ -139,16 +139,22 @@ export default function AdminPricesEditor() {
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">
-      <section className="mx-auto w-full max-w-[760px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
-        <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#80643a]">
-          MSAI · Admin
-        </p>
-        <h1 className="mt-2 font-serif text-3xl">Ticket prices</h1>
-        <p className="mt-2 text-sm text-[#62645f]">
-          Set the amounts displayed on the event page and charged by Stripe.
-        </p>
+      <section className="mx-auto w-full max-w-[620px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
+        <div className="mb-7 flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[.2em] text-[#80643a]">
+              MSAI · Admin
+            </p>
+            <h1 className="mt-2 font-serif text-3xl text-[#15294b]">
+              Ticket prices
+            </h1>
+            <p className="mt-2 text-sm text-[#62645f]">
+              Set the amounts displayed on the event page and charged by Stripe.
+            </p>
+          </div>
+        </div>
 
-        {authenticated && <AdminNavigation active="prices" />}
+        <AdminNavigation active="prices" />
 
         {loading ? (
           <p aria-live="polite" className="py-8 text-center text-sm text-[#62645f]">

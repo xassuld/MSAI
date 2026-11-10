@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import AdminNavigation from "./admin-navigation";
 
@@ -40,7 +39,6 @@ type CloudinaryUpload = {
 };
 
 export default function AdminEventEditor() {
-  const router = useRouter();
   const [authenticated, setAuthenticated] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [password, setPassword] = useState("");
@@ -293,28 +291,6 @@ export default function AdminEventEditor() {
     }
   }
 
-  async function handleLogout() {
-    setBusy(true);
-    try {
-      const response = await fetch(`${adminApiUrl}/logout`, {
-        method: "POST",
-        credentials: "include",
-      });
-      if (!response.ok) throw new Error("Could not sign out. Please retry.");
-      setAuthenticated(false);
-      setEvent(initialEvent);
-      setSentTicketCount(null);
-      setTicketCountError("");
-      setMessage("");
-      router.push("/");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not sign out.");
-      setMessageIsError(true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   function updateField(field: keyof EventFields, value: string | number) {
     setEvent((current) => ({ ...current, [field]: value }));
   }
@@ -337,19 +313,9 @@ export default function AdminEventEditor() {
               Update the public invitation and event poster.
             </p>
           </div>
-          {authenticated && (
-            <button
-              className="rounded-full border border-[#15294b]/20 px-3 py-2 text-xs font-semibold text-[#15294b] hover:bg-[#e8dfd0] disabled:opacity-50"
-              disabled={busy}
-              onClick={handleLogout}
-              type="button"
-            >
-              Sign out
-            </button>
-          )}
         </div>
 
-        {authenticated && <AdminNavigation active="details" />}
+        <AdminNavigation active="details" />
 
         {checkingSession ? (
           <p aria-live="polite" className="py-8 text-center text-sm text-[#62645f]">
