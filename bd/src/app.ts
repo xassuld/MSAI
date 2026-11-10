@@ -145,6 +145,9 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
 }
 
 async function deliverComplimentaryTicket(ticket: TicketDocument): Promise<void> {
+  if (!ticket.email) {
+    throw new Error("Complimentary ticket has no recipient email.");
+  }
   const event = await getChristmasEvent();
   await sendAdmissionTicket(
     ticket.email,
@@ -176,24 +179,28 @@ app.get("/api/events/christmas", async (_request, response, next) => {
     await ensureChristmasEventState(event);
     await mongooseReady;
     const registrationState = await EventModel.findById("christmas")
-      .select("soldCount ticketCount")
+      .select("soldCount onlineSoldCount gateSaleCount ticketCount")
       .lean();
     const soldCount = registrationState?.soldCount ?? 0;
+    const onlineSoldCount = registrationState?.onlineSoldCount ?? 0;
+    const gateSaleCount = registrationState?.gateSaleCount ?? 0;
     const ticketCount = registrationState?.ticketCount ?? 0;
     const activeTier =
-      soldCount < 25
-        ? { name: "Early Bird", price: 18, remaining: 25 - soldCount }
-        : soldCount < 75
-          ? { name: "Regular", price: 22, remaining: 75 - soldCount }
-          : soldCount < 120
-            ? { name: "Late", price: 26, remaining: 120 - soldCount }
+      onlineSoldCount < 20
+        ? { name: "Early Bird", price: 15, remaining: 20 - onlineSoldCount }
+        : onlineSoldCount < 75
+          ? { name: "Regular", price: 25, remaining: 75 - onlineSoldCount }
+          : onlineSoldCount < 100
+            ? { name: "Late", price: 28, remaining: 100 - onlineSoldCount }
             : null;
     response.json({
       ...event,
       maxCapacity: 120,
       soldCount,
       totalRegistered: ticketCount,
-      isSoldOut: soldCount >= 120,
+      isSoldOut: onlineSoldCount >= 100 || soldCount >= 120,
+      gateTicketsRemaining: Math.max(0, Math.min(20 - gateSaleCount, 120 - soldCount)),
+      onlineTicketsRemaining: Math.max(0, Math.min(100 - onlineSoldCount, 120 - soldCount)),
       activeTier,
     });
   } catch (error) {
@@ -246,6 +253,7 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
         amountPaidCents: ticket.amountPaidCents,
         ticketNumber: ticket.ticketNumber,
         isComplimentary: ticket.isComplimentary ?? false,
+        isGateSale: ticket.paymentMethod === "cash",
         qrCodeDataUrl,
       },
     });
@@ -328,7 +336,7 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
     const event = await getChristmasEvent();
     await ensureChristmasEventState(event);
     const registrationState = await EventModel.findById("christmas")
-      .select("soldCount ticketCount")
+      .select("soldCount onlineSoldCount gateSaleCount ticketCount")
       .lean();
     const soldCount = registrationState?.soldCount ?? 0;
     response.set("Cache-Control", "no-store");
@@ -371,6 +379,7 @@ app.get("/api/admin/tickets", async (request, response, next) => {
     response.json({
       sentTickets: sentTickets.map((ticket) => ({
         ...ticket,
+        email: ticket.email ?? null,
         ticketTier: ticket.ticketTier ?? null,
         ticketNumber: ticket.ticketNumber,
         isSandbox: ticket.isSandbox,
@@ -435,6 +444,7 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
               ticketTier: tier.key,
               amountPaidCents: 0,
               currency: "eur",
+              paymentMethod: "complimentary",
               isPaid: false,
               isComplimentary: true,
             },
@@ -466,6 +476,7 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
           ticketTier: ticket.ticketTier,
           isComplimentary: true,
           isSandbox: false,
+          isGateSale: false,
           emailSentAt: null,
         },
       });
@@ -480,7 +491,103 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
         ticketTier: ticket.ticketTier,
         isComplimentary: true,
         isSandbox: false,
+        isGateSale: false,
         emailSentAt: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post("/api/admin/tickets/gate", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const adminSession = await getAdminSession(request, response);
+    if (!adminSession.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const name =
+      typeof request.body?.name === "string"
+        ? request.body.name.trim().replace(/\s+/g, " ")
+        : "";
+    if (!name || name.length > 120 || /[\u0000-\u001f\u007f]/.test(name)) {
+      response.status(400).json({ error: "Enter a valid attendee name." });
+      return;
+    }
+
+    await mongooseReady;
+    await ensureChristmasEventState(await getChristmasEvent());
+    const mongoSession = await mongoose.startSession();
+    let ticket: TicketDocument | undefined;
+    let soldOut = false;
+    try {
+      await mongoSession.withTransaction(async () => {
+        const updatedEvent = await EventModel.findOneAndUpdate(
+          {
+            _id: "christmas",
+            soldCount: { $lt: 120 },
+            gateSaleCount: { $lt: 20 },
+          },
+          { $inc: { soldCount: 1, gateSaleCount: 1, ticketCount: 1 } },
+          { new: true, session: mongoSession },
+        );
+        if (!updatedEvent) {
+          const currentEvent = await EventModel.findById("christmas")
+            .select("soldCount gateSaleCount")
+            .session(mongoSession)
+            .lean();
+          soldOut =
+            (currentEvent?.soldCount ?? 0) >= 120 ||
+            (currentEvent?.gateSaleCount ?? 0) >= 20;
+          return;
+        }
+
+        const checkedInAt = new Date();
+        [ticket] = await TicketModel.create(
+          [
+            {
+              name,
+              ticketCode: generateTicketCode(),
+              ticketNumber: updatedEvent.ticketCount,
+              ticketTier: "atGate",
+              amountPaidCents: 2800,
+              currency: "eur",
+              paymentMethod: "cash",
+              isPaid: true,
+              isCheckedIn: true,
+              checkedInAt,
+            },
+          ],
+          { session: mongoSession },
+        );
+      });
+    } finally {
+      await mongoSession.endSession();
+    }
+
+    if (soldOut) {
+      response.status(409).json({ error: "All available At-gate tickets have been issued." });
+      return;
+    }
+    if (!ticket) {
+      throw new Error("Gate ticket transaction completed without creating a ticket.");
+    }
+
+    response.status(201).json({
+      ticket: {
+        name: ticket.name,
+        email: null,
+        ticketNumber: ticket.ticketNumber,
+        ticketTier: ticket.ticketTier,
+        isComplimentary: false,
+        isSandbox: false,
+        isGateSale: true,
+        emailSentAt: null,
+        isCheckedIn: true,
       },
     });
   } catch (error) {
@@ -569,7 +676,7 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
     await ensureChristmasEventState(await getChristmasEvent());
     const mongoSession = await mongoose.startSession();
     const outcome: {
-      result: "deleted" | "notFound" | "notEligible" | "checkedIn" | "notLatest";
+      result: "deleted" | "notFound" | "notEligible" | "capacityOutOfSync";
     } = { result: "notFound" };
 
     try {
@@ -579,29 +686,31 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
           outcome.result = "notFound";
           return;
         }
-        if (
-          !ticket.isComplimentary &&
-          !ticket.stripeSessionId?.startsWith("cs_test_")
-        ) {
+        if (!ticket.isPaid && !ticket.isComplimentary) {
           outcome.result = "notEligible";
           return;
         }
-        if (ticket.isCheckedIn) {
-          outcome.result = "checkedIn";
-          return;
-        }
 
-        const ticketCountUpdate = ticket.isPaid
-          ? { ticketCount: -1, soldCount: -1 }
-          : { ticketCount: -1 };
-        const event = await EventModel.findOneAndUpdate(
-          { _id: "christmas", ticketCount: ticketNumber },
-          { $inc: ticketCountUpdate },
-          { new: true, session: mongoSession },
-        );
-        if (!event) {
-          outcome.result = "notLatest";
-          return;
+        if (ticket.isPaid) {
+          const ticketCounterUpdate =
+            ticket.paymentMethod === "cash"
+              ? { soldCount: -1, gateSaleCount: -1 }
+              : { soldCount: -1, onlineSoldCount: -1 };
+          const event = await EventModel.findOneAndUpdate(
+            {
+              _id: "christmas",
+              soldCount: { $gt: 0 },
+              ...(ticket.paymentMethod === "cash"
+                ? { gateSaleCount: { $gt: 0 } }
+                : { onlineSoldCount: { $gt: 0 } }),
+            },
+            { $inc: ticketCounterUpdate },
+            { new: true, session: mongoSession },
+          );
+          if (!event) {
+            outcome.result = "capacityOutOfSync";
+            return;
+          }
         }
 
         const deletion = await TicketModel.deleteOne(
@@ -623,14 +732,14 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
       response.status(404).json({ error: "Ticket not found." });
     } else if (outcome.result === "notEligible") {
       response.status(409).json({
-        error: "Only complimentary or Sandbox test tickets can be deleted here.",
+        error: "This ticket is not an admission ticket and cannot be deleted here.",
       });
-    } else if (outcome.result === "checkedIn") {
-      response.status(409).json({ error: "A checked-in ticket cannot be deleted." });
-    } else {
+    } else if (outcome.result === "capacityOutOfSync") {
       response.status(409).json({
-        error: "Only the latest ticket can be deleted so capacity and ticket numbers remain consistent.",
+        error: "Paid ticket capacity is out of sync. The ticket was not deleted.",
       });
+    } else {
+      response.status(409).json({ error: "This ticket cannot be deleted." });
     }
   } catch (error) {
     next(error);

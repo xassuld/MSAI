@@ -16,6 +16,7 @@ type EventData = {
   maxCapacity: number;
   soldCount: number;
   isSoldOut: boolean;
+  gateTicketsRemaining: number;
   activeTier: {
     name: string;
     price: number;
@@ -27,20 +28,26 @@ const ticketTiers = [
   {
     key: "earlyBird",
     name: "Early Bird",
-    price: 18,
-    ticketRange: "Tickets 1–25",
+    price: 15,
+    ticketRange: "First 20 paid sales",
   },
   {
     key: "regular",
     name: "Regular",
-    price: 22,
-    ticketRange: "Tickets 26–75",
+    price: 25,
+    ticketRange: "Next 55 paid sales",
   },
   {
     key: "late",
     name: "Late",
-    price: 26,
-    ticketRange: "Tickets 76–120",
+    price: 28,
+    ticketRange: "Next 25 paid sales",
+  },
+  {
+    key: "atGate",
+    name: "At-gate · Cash only",
+    price: 28,
+    ticketRange: "Up to 20 tickets · In-person only",
   },
 ] as const;
 
@@ -173,6 +180,9 @@ export default async function ChristmasPage() {
                   Pay securely online — your ticket is issued after payment
                 </p>
               </div>
+              <p className="rounded-xl border border-[#923a35]/20 bg-[#f0ded6] px-4 py-3 text-center text-xs font-bold text-[#923a35]">
+                All ticket sales are final. No refunds.
+              </p>
               {event.partyDescription && (
                 <div className="rounded-2xl border border-[#c7b995] bg-[#fffdf8]/70 px-5 py-4">
                   <p className="text-[9px] font-bold uppercase tracking-[.16em] text-[#80643a]">
@@ -214,8 +224,16 @@ export default async function ChristmasPage() {
                 </div>
                 <p className="mt-3 text-xs font-semibold">
                   {event.isSoldOut
-                    ? "Sold out — ticket sales are closed."
+                    ? event.gateTicketsRemaining > 0
+                      ? `Online sales are closed. ${event.gateTicketsRemaining} cash-only At-gate ${
+                          event.gateTicketsRemaining === 1 ? "ticket is" : "tickets are"
+                        } available in person.`
+                      : "Sold out — all 120 admission tickets have been issued."
                     : `${event.activeTier?.name ?? "Tickets"} · ${event.activeTier?.remaining ?? 0} tickets remaining`}
+                </p>
+                <p className="mt-2 text-xs">
+                  {event.gateTicketsRemaining} At-gate tickets remain. Available
+                  in person at any time while supplies last. Cash only · €28.
                 </p>
               </div>
             </section>

@@ -4,18 +4,18 @@ import { ensureTicketIndexes, EventModel, TicketModel } from "./models.js";
 import type { EventData } from "./event-data.js";
 
 export const ticketTiers = {
-  earlyBird: { name: "Early Bird", price: 18, amountInCents: 1800, end: 25 },
-  regular: { name: "Regular", price: 22, amountInCents: 2200, end: 75 },
-  late: { name: "Late", price: 26, amountInCents: 2600, end: 120 },
+  earlyBird: { name: "Early Bird", price: 15, amountInCents: 1500, end: 20 },
+  regular: { name: "Regular", price: 25, amountInCents: 2500, end: 75 },
+  late: { name: "Late", price: 28, amountInCents: 2800, end: 100 },
 } as const;
 
-export type TicketTierName = keyof typeof ticketTiers;
+export type TicketTierName = keyof typeof ticketTiers | "atGate" | "lateLate";
 
 export function resolveTicketTier(
   soldCount: number,
 ): { key: TicketTierName; name: string; price: number; amountInCents: number } {
-  const key =
-    soldCount < 25
+  const key: keyof typeof ticketTiers =
+    soldCount < 20
       ? "earlyBird"
       : soldCount < 75
         ? "regular"
@@ -37,10 +37,12 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       $set: {
         title: event.title,
         maxCapacity: 120,
-        tierCaps: { earlyBird: 25, regular: 50, late: 45 },
+        tierCaps: { earlyBird: 20, regular: 55, late: 25, atGate: 20 },
       },
       $setOnInsert: {
         soldCount: 0,
+        onlineSoldCount: 0,
+        gateSaleCount: 0,
         ticketCount: 0,
         countersInitialized: true,
       },
@@ -57,6 +59,13 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       .select("ticketNumber")
       .lean(),
   ]);
+  const [onlinePaidTicketCount, gateSaleCount] = await Promise.all([
+    TicketModel.countDocuments({
+      isPaid: true,
+      paymentMethod: { $ne: "cash" },
+    }),
+    TicketModel.countDocuments({ isPaid: true, paymentMethod: "cash" }),
+  ]);
   await EventModel.updateOne(
     { _id: "christmas", countersInitialized: { $ne: true } },
     {
@@ -67,4 +76,14 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       },
     },
   );
+  await Promise.all([
+    EventModel.updateOne(
+      { _id: "christmas", onlineSoldCount: { $exists: false } },
+      { $set: { onlineSoldCount: onlinePaidTicketCount } },
+    ),
+    EventModel.updateOne(
+      { _id: "christmas", gateSaleCount: { $exists: false } },
+      { $set: { gateSaleCount } },
+    ),
+  ]);
 }

@@ -13,7 +13,8 @@ import {
 } from "./ticketing.js";
 import { sendAdmissionTicket } from "./ticket-email.js";
 
-const maxCapacity = 120;
+const onlineTicketLimit = 100;
+const totalTicketLimit = 120;
 let stripeClient: Stripe | undefined;
 
 function getStripe(): Stripe {
@@ -66,14 +67,19 @@ export async function createCheckoutSession(
 
     await mongooseReady;
     await ensureChristmasEventState(await getChristmasEvent());
-    const event = await EventModel.findById("christmas").select("soldCount").lean();
-    const soldCount = event?.soldCount ?? 0;
-    if (soldCount >= maxCapacity) {
+    const event = await EventModel.findById("christmas")
+      .select("soldCount onlineSoldCount")
+      .lean();
+    const onlineSoldCount = event?.onlineSoldCount ?? 0;
+    if (
+      onlineSoldCount >= onlineTicketLimit ||
+      (event?.soldCount ?? 0) >= totalTicketLimit
+    ) {
       response.status(409).json({ error: "Event is completely sold out." });
       return;
     }
 
-    const tier = resolveTicketTier(soldCount);
+    const tier = resolveTicketTier(onlineSoldCount);
     const frontendUrl = process.env.FRONTEND_URL;
     if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
     const baseUrl = new URL(frontendUrl).origin;
@@ -203,8 +209,12 @@ export async function handleStripeWebhook(
       }
 
       const updatedEvent = await EventModel.findOneAndUpdate(
-        { _id: "christmas", soldCount: { $lt: maxCapacity } },
-        { $inc: { soldCount: 1, ticketCount: 1 } },
+        {
+          _id: "christmas",
+          soldCount: { $lt: totalTicketLimit },
+          onlineSoldCount: { $lt: onlineTicketLimit },
+        },
+        { $inc: { soldCount: 1, onlineSoldCount: 1, ticketCount: 1 } },
         { new: true, session: activeSession },
       );
       if (!updatedEvent) {
@@ -251,6 +261,9 @@ export async function handleStripeWebhook(
     if (ticket.emailSentAt) {
       response.json({ received: true });
       return;
+    }
+    if (!ticket.email) {
+      throw new Error("Paid ticket has no recipient email.");
     }
 
     const eventDetails = await getChristmasEvent();

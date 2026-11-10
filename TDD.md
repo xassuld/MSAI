@@ -16,36 +16,40 @@ Next.js frontend -> Express backend -> Stripe Checkout
 
 ## Capacity and pricing
 
-The maximum capacity is 120 attendees. Pricing is determined by the sequential
-paid ticket number, not a calendar date:
+The maximum capacity is 120 attendees. The first 100 tickets are sold online;
+the final 20 are reserved for cash-only gate sales. Pricing is determined by
+online paid-sale order, independently of gate sales:
 
-| Ticket numbers | Tier | Price |
+| Allocation | Tier | Price |
 |---|---|---:|
-| 1-25 | Early Bird | €18 |
-| 26-75 | Regular | €22 |
-| 76-120 | Late | €26 |
+| First 20 online paid sales | Early Bird | €15 |
+| Next 55 online paid sales | Regular | €25 |
+| Next 25 online paid sales | Late | €28 |
+| Up to 20 in-person sales, available anytime | At-gate (cash only) | €28 |
 
-`events` stores the `christmas` event with `maxCapacity`, `soldCount`,
-`ticketCount`, and tier caps of 25, 50, and 45. `soldCount` counts paid tickets
-for capacity and pricing; `ticketCount` allocates unique sequential numbers to
-all tickets. `soldCount` increments only when a verified paid
-Checkout session is fulfilled. Checkout creation never reserves a ticket or
-increments the count. Attempts to start checkout when sold out return HTTP 409.
+`events` stores the `christmas` event with `maxCapacity`, total `soldCount`,
+`onlineSoldCount`, `gateSaleCount`, `ticketCount`, and tier caps of 20, 55, 25,
+and 20. Online checkout increments the online and total paid counts; gate sales
+increment the gate and total paid counts. `ticketCount` allocates unique
+sequential numbers to all tickets. Checkout creation never reserves a ticket
+or increments counts. Online checkout closes at 100 online paid tickets.
+Attempts to start checkout after that return HTTP 409.
 If more paid sessions complete than remaining spots, the webhook transaction
 will reject the excess ticket and refund that payment.
 
 ## Ticket fulfillment
 
 `POST /api/events/christmas/checkout` validates name, email, and consent,
-normalizes the email, selects the current price from `soldCount`, and returns a
-Stripe Checkout URL. It does not create a ticket.
+normalizes the email, selects the current price from `onlineSoldCount`, and
+returns a Stripe Checkout URL. It does not create a ticket.
 
 `POST /api/webhooks/stripe` is registered with `express.raw()` before JSON
 parsing. Stripe signature verification is required. On
 `checkout.session.completed`, a MongoDB transaction:
 
 1. Checks the unique Stripe session ID for an existing ticket.
-2. Atomically increments `soldCount` only when it is below 120.
+2. Atomically increments total paid count and online paid count only when
+   online sales are below 100 and total attendance is below 120.
 3. Creates a paid ticket with a unique eight-character code, sequential ticket
    number, tier, amount, and Stripe identifiers.
 
@@ -61,8 +65,14 @@ do not count toward the 120 paid-ticket capacity, are marked complimentary
 rather than paid, and can be checked in. Email delivery failures leave the
 ticket intact and can be retried from the admin ticket list.
 
-The ticket collection is `christmas_admission_tickets`. Email addresses are
-trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.
+Cashiers can issue up to 20 €28 At-gate tickets at any time, independent of
+online sales. The cashier collects cash and the attendee's name only; the
+ticket is created without an email and marked checked in immediately to
+authorize entry. Gate sales do not affect online tier pricing or availability.
+
+The ticket collection is `christmas_admission_tickets`. Provided email
+addresses are trimmed/lowercase and indexed; ticket codes and Stripe session
+IDs are unique.
 Existing non-payment registrations are not considered paid and cannot be used
 for entry. The backend drops legacy unique email and `registrationNumber`
 indexes when initializing the updated ticket indexes.
@@ -70,21 +80,26 @@ indexes when initializing the updated ticket indexes.
 ## API
 
 - `GET /api/events/christmas` returns event content, `maxCapacity`,
-  `soldCount`, `isSoldOut`, and the active tier's name, price, and remaining
-  quantity.
+  total `soldCount`, online and At-gate tickets remaining, `isSoldOut`, and the
+  active online tier's name, price, and remaining quantity.
 - `POST /api/admin/tickets/check-in` requires the existing authenticated
   iron-session, and atomically marks a verified paid or complimentary ticket
   as checked in. Repeat scans return HTTP 409.
 - `POST /api/admin/tickets/complimentary` creates and emails a complimentary
   ticket to the supplied attendee name and email without consuming paid-ticket
   capacity.
+- `POST /api/admin/tickets/gate` issues a €28 cash-only At-gate ticket by
+  attendee name at any time, checks it in immediately, and does not require or
+  send email.
 - `POST /api/admin/tickets/:ticketNumber/resend` retries email delivery for an
   unsent complimentary ticket.
-- The admin recipient list can delete the latest unscanned complimentary or
-  Sandbox ticket. Deletion invalidates its code; deleting a Sandbox ticket
-  reopens its paid capacity spot, while deleting a complimentary ticket does
-  not affect paid capacity. Paid live tickets cannot be deleted through this
-  action.
+- Admins can delete any paid, Sandbox, or complimentary ticket, including
+  checked-in tickets. Deletion invalidates its code; deleting a paid ticket
+  reopens its paid capacity spot without issuing a refund, while deleting a
+  complimentary ticket does not affect paid capacity. Ticket numbers are not
+  reused after deletion.
+- Ticket sales are final and non-refundable. This notice appears on the event
+  page, checkout acknowledgment, paid ticket page, and paid ticket email.
 - Admin event editing, ticket reporting, and event poster upload remain
   authenticated.
 
@@ -95,6 +110,6 @@ indexes when initializing the updated ticket indexes.
   `/api/webhooks/stripe` and subscribe to `checkout.session.completed`.
 - Keep MongoDB, Gmail, Stripe, Cloudinary, and admin credentials backend-only.
 - Admin mutations require the existing same-origin check and iron-session.
-- Verify all three price bands, successful payment and email, webhook retries,
-  a duplicate scan, and the 121st paid checkout refund in a Stripe test
-  environment before launch.
+- Verify all three online price bands, the 20 cash gate tickets, successful
+  payment and email, webhook retries, duplicate scans, and rejection/refund of
+  paid sessions beyond the online allocation in a Stripe test environment.

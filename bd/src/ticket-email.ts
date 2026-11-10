@@ -63,6 +63,8 @@ export async function sendAdmissionTicket(
     earlyBird: "Early Bird",
     regular: "Regular",
     late: "Late",
+    atGate: "At-gate",
+    lateLate: "At-gate",
   };
   const ticketType = isComplimentary ? "Complimentary" : tierLabels[ticketTier];
   const ticketPrice = (amountPaidCents / 100).toFixed(2);
@@ -90,6 +92,7 @@ export async function sendAdmissionTicket(
     `Ticket code: ${ticketCode}`,
     `Ticket type: ${ticketType}`,
     paymentDescription,
+    ...(!isComplimentary ? ["All ticket sales are final. No refunds."] : []),
     `Date: ${date}`,
     `Time: ${time}`,
     `Location: ${location}`,
@@ -141,6 +144,7 @@ export async function sendAdmissionTicket(
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
       <p style="font-size:14px;line-height:1.6"><strong>${isComplimentary ? "Admission:" : "Amount paid:"}</strong> ${isComplimentary ? "Complimentary — no payment required" : `€${ticketPrice}`}</p>
+      ${isComplimentary ? "" : '<p style="padding:10px 12px;border:1px solid #e6c6bd;border-radius:8px;background:#f0ded6;color:#923a35;font-size:13px;font-weight:bold">All ticket sales are final. No refunds.</p>'}
       <p style="font-size:14px;line-height:1.6"><strong>What&apos;s included:</strong> ${safePartyDescription}</p>
       <p style="font-size:12px"><a href="${ticketUrl}" style="color:#15294b">Open your online ticket and QR code</a></p>
       <p style="font-size:12px"><a href="${eventUrl}" style="color:#15294b">Open the event page</a></p>

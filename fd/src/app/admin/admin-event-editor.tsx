@@ -576,9 +576,10 @@ export default function AdminEventEditor() {
               <legend className="px-1 text-sm font-semibold text-[#15294b]">
                 Ticket pricing by tickets sold
               </legend>
-              <p className="text-sm text-[#15294b]">Tickets 1–25: Early Bird · €18</p>
-              <p className="text-sm text-[#15294b]">Tickets 26–75: Regular · €22</p>
-              <p className="text-sm text-[#15294b]">Tickets 76–120: Late · €26</p>
+              <p className="text-sm text-[#15294b]">Tickets 1–20: Early Bird · €15</p>
+              <p className="text-sm text-[#15294b]">Tickets 21–75: Regular · €25</p>
+              <p className="text-sm text-[#15294b]">Tickets 76–100: Late · €28</p>
+              <p className="text-sm text-[#15294b]">Up to 20 At-gate tickets · €28 cash · available anytime</p>
             </fieldset>
 
             <div className="grid gap-2 text-sm font-semibold text-[#15294b]">

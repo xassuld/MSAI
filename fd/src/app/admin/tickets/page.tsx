@@ -7,11 +7,12 @@ const adminApiUrl = "/api/admin";
 
 type SentTicketRecipient = {
   name: string;
-  email: string;
+  email?: string | null;
   ticketNumber: number;
-  ticketTier: "earlyBird" | "regular" | "late" | null;
+  ticketTier: "earlyBird" | "regular" | "late" | "atGate" | "lateLate" | null;
   isComplimentary: boolean;
   isSandbox: boolean;
+  isGateSale?: boolean;
   emailSentAt: string | null;
 };
 
@@ -27,6 +28,8 @@ const ticketTierLabels = {
   earlyBird: "Early Bird",
   regular: "Regular",
   late: "Late",
+  atGate: "At-gate · Cash",
+  lateLate: "At-gate · Cash",
 } as const;
 
 export default function AdminTicketsPage() {
@@ -40,6 +43,8 @@ export default function AdminTicketsPage() {
   const [complimentaryName, setComplimentaryName] = useState("");
   const [complimentaryEmail, setComplimentaryEmail] = useState("");
   const [sendingComplimentary, setSendingComplimentary] = useState(false);
+  const [gateName, setGateName] = useState("");
+  const [issuingGateTicket, setIssuingGateTicket] = useState(false);
   const [showComplimentaryPreview, setShowComplimentaryPreview] = useState(false);
   const [previewEvent, setPreviewEvent] = useState<TicketPreviewEvent>({
     title: "Christmas together",
@@ -104,6 +109,37 @@ export default function AdminTicketsPage() {
     }
   }
 
+  async function issueGateTicket(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIssuingGateTicket(true);
+    setActionMessage("");
+    try {
+      const response = await fetch(`${adminApiUrl}/tickets/gate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: gateName }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        ticket?: SentTicketRecipient;
+      };
+      if (!response.ok) throw new Error(result.error ?? "Could not issue gate ticket.");
+      if (!result.ticket) throw new Error("The server did not return the issued gate ticket.");
+      upsertTicket(result.ticket);
+      setGateName("");
+      setActionMessage(
+        `€28 cash ticket #${result.ticket.ticketNumber} issued for ${result.ticket.name}. Entry authorized.`,
+      );
+    } catch (cause) {
+      setActionMessage(
+        cause instanceof Error ? cause.message : "Could not issue gate ticket.",
+      );
+    } finally {
+      setIssuingGateTicket(false);
+    }
+  }
+
   async function resendComplimentaryTicket(ticket: SentTicketRecipient) {
     setResendingTicketNumber(ticket.ticketNumber);
     setActionMessage("");
@@ -131,9 +167,20 @@ export default function AdminTicketsPage() {
   }
 
   async function deleteRemovableTicket(ticket: SentTicketRecipient) {
-    const ticketKind = ticket.isComplimentary ? "complimentary" : "Sandbox test";
+    const ticketKind = ticket.isComplimentary
+      ? "complimentary"
+      : ticket.isGateSale
+        ? "cash gate"
+        : ticket.isSandbox
+          ? "Sandbox test"
+          : "paid live";
+    const paidTicketWarning = ticket.isComplimentary
+      ? ""
+      : ticket.isGateSale
+        ? " This invalidates the ticket; no cash refund will be issued."
+        : " Its ticket will be invalidated and the paid capacity spot reopened. No refund will be issued.";
     const confirmed = window.confirm(
-      `Delete ${ticketKind} ticket #${ticket.ticketNumber} for ${ticket.email}? This invalidates its ticket code. Only the latest unscanned ticket can be deleted.`,
+      `Delete ${ticketKind} ticket #${ticket.ticketNumber} for ${ticket.email ?? ticket.name}? This invalidates its ticket code.${paidTicketWarning}`,
     );
     if (!confirmed) return;
 
@@ -153,7 +200,11 @@ export default function AdminTicketsPage() {
       );
       setActionMessage(
         `${ticketKind} ticket #${ticket.ticketNumber} was deleted.${
-          ticket.isComplimentary ? "" : " Its paid capacity spot was reopened."
+          ticket.isComplimentary
+            ? ""
+            : ticket.isGateSale
+              ? " No cash refund was issued."
+              : " Its paid capacity spot was reopened; no refund was issued."
         }`,
       );
     } catch (cause) {
@@ -247,10 +298,9 @@ export default function AdminTicketsPage() {
           Paid and complimentary tickets are listed with their email status.
         </p>
         <p className="mt-2 text-xs leading-relaxed text-[#62645f]">
-          The latest unscanned complimentary or Sandbox test ticket can be
-          deleted here. Deleting a complimentary ticket does not affect paid
-          capacity; deleting a Sandbox test ticket reopens its paid capacity
-          spot. Paid live tickets cannot be deleted from this page.
+          Any ticket can be deleted here. Deleting a paid ticket invalidates it
+          and reopens its capacity spot without issuing a refund. Complimentary
+          tickets do not affect paid capacity.
         </p>
         <div className="mt-5 flex flex-wrap gap-2 text-xs font-semibold">
           <span className="rounded-full bg-[#dce5d6] px-3 py-1 text-[#24523c]">
@@ -263,6 +313,38 @@ export default function AdminTicketsPage() {
             Red · Late
           </span>
         </div>
+
+        <form
+          className="mt-7 grid gap-4 rounded-2xl border border-[#923a35]/30 bg-[#f0ded6]/60 p-5 sm:grid-cols-2 sm:p-6"
+          onSubmit={issueGateTicket}
+        >
+          <div className="sm:col-span-2">
+            <h2 className="font-serif text-xl">Cash-only At-gate · €28</h2>
+            <p className="mt-1 text-xs leading-relaxed text-[#62645f]">
+              Available anytime for in-person sales. Collect cash and the
+              attendee&apos;s name only; issuing the ticket immediately
+              authorizes entry. Up to 20 tickets.
+            </p>
+          </div>
+          <label className="grid text-sm font-semibold">
+            Attendee name
+            <input
+              autoComplete="name"
+              className="mt-1.5 w-full rounded-xl border border-[#c7b995] bg-white px-3.5 py-3 text-sm font-normal outline-none focus:border-[#15294b] focus:ring-2 focus:ring-[#15294b]/15"
+              maxLength={120}
+              onChange={(event) => setGateName(event.target.value)}
+              required
+              value={gateName}
+            />
+          </label>
+          <button
+            className="self-end rounded-xl bg-[#923a35] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#7d302c] disabled:opacity-50"
+            disabled={issuingGateTicket}
+            type="submit"
+          >
+            {issuingGateTicket ? "Issuing…" : "Collect cash · issue · admit"}
+          </button>
+        </form>
 
         <form
           className="mt-7 grid gap-4 rounded-2xl border border-[#c7b995]/80 bg-[#fffdf8]/70 p-5 sm:grid-cols-2 sm:p-6"
@@ -419,7 +501,9 @@ export default function AdminTicketsPage() {
                   {tickets.map((ticket) => (
                     <tr className="bg-[#fffdf8]/70" key={ticket.ticketNumber}>
                       <td className="px-4 py-3 font-semibold">{ticket.name}</td>
-                      <td className="break-all px-4 py-3">{ticket.email}</td>
+                      <td className="break-all px-4 py-3">
+                        {ticket.email ?? (ticket.isGateSale ? "Cash at gate" : "—")}
+                      </td>
                       <td className="px-4 py-3">
                         <span
                           className={`inline-flex rounded-full px-3 py-1 text-xs font-bold ${
@@ -427,7 +511,9 @@ export default function AdminTicketsPage() {
                               ? "bg-[#dce5d6] text-[#24523c]"
                               : ticket.ticketTier === "regular"
                                 ? "bg-[#ebe1cd] text-[#71572e]"
-                                : ticket.ticketTier === "late"
+                                : ticket.ticketTier === "late" ||
+                                    ticket.ticketTier === "atGate" ||
+                                    ticket.ticketTier === "lateLate"
                                   ? "bg-[#f0ded6] text-[#923a35]"
                                   : "bg-[#e8dfcf] text-[#62645f]"
                           }`}
@@ -440,7 +526,9 @@ export default function AdminTicketsPage() {
                         </span>
                       </td>
                       <td className="whitespace-nowrap px-4 py-3 text-[#62645f]">
-                        {ticket.emailSentAt ? (
+                        {ticket.isGateSale ? (
+                          "Cash · admitted"
+                        ) : ticket.emailSentAt ? (
                           <time dateTime={ticket.emailSentAt}>
                             {new Intl.DateTimeFormat("en", {
                               dateStyle: "medium",
@@ -465,23 +553,16 @@ export default function AdminTicketsPage() {
                                 : "Retry email"}
                             </button>
                           )}
-                          {(ticket.isComplimentary || ticket.isSandbox) && (
-                            <button
-                              className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
-                              disabled={deletingTicketNumber !== null}
-                              onClick={() => void deleteRemovableTicket(ticket)}
-                              type="button"
-                            >
-                              {deletingTicketNumber === ticket.ticketNumber
-                                ? "Deleting…"
-                                : ticket.isComplimentary
-                                  ? "Delete comp"
-                                  : "Delete test"}
-                            </button>
-                          )}
-                          {!ticket.isComplimentary && !ticket.isSandbox && (
-                            <span className="text-xs text-[#62645f]">Live ticket</span>
-                          )}
+                          <button
+                            className="rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
+                            disabled={deletingTicketNumber !== null}
+                            onClick={() => void deleteRemovableTicket(ticket)}
+                            type="button"
+                          >
+                            {deletingTicketNumber === ticket.ticketNumber
+                              ? "Deleting…"
+                              : "Delete ticket"}
+                          </button>
                         </div>
                       </td>
                     </tr>

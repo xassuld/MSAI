@@ -19,11 +19,11 @@ export type EventData = {
 };
 
 export type EditableEvent = Omit<EventData, "_id" | "updatedAt">;
-export type TicketTierName = "earlyBird" | "regular" | "late";
+export type TicketTierName = "earlyBird" | "regular" | "late" | "atGate" | "lateLate";
 
 export type AdmissionTicket = {
   name: string;
-  email: string;
+  email?: string;
   createdAt: Date;
   ticketTier?: TicketTierName;
   emailSentAt?: Date;
@@ -36,6 +36,7 @@ export type SentAdmissionTicket = Pick<
   ticketNumber: number;
   isSandbox: boolean;
   isComplimentary: boolean;
+  isGateSale: boolean;
   emailSentAt?: Date;
 };
 
@@ -222,11 +223,14 @@ export async function getSentAdmissionTickets(): Promise<
     $or: [{ isPaid: true }, { isComplimentary: true }],
   })
     .sort({ emailSentAt: -1, createdAt: -1 })
-    .select("name email ticketTier ticketNumber stripeSessionId isComplimentary emailSentAt")
+    .select(
+      "name email ticketTier ticketNumber stripeSessionId isComplimentary paymentMethod emailSentAt",
+    )
     .lean();
   return tickets.map(({ stripeSessionId, ...ticket }) => ({
     ...ticket,
     isComplimentary: ticket.isComplimentary ?? false,
+    isGateSale: ticket.paymentMethod === "cash",
     isSandbox: stripeSessionId?.startsWith("cs_test_") ?? false,
   }));
 }

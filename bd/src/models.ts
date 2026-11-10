@@ -8,12 +8,15 @@ const eventSchema = new Schema(
     title: { type: String, required: true },
     maxCapacity: { type: Number, required: true, min: 1, default: 120 },
     soldCount: { type: Number, required: true, min: 0, default: 0 },
+    onlineSoldCount: { type: Number, required: true, min: 0, default: 0 },
+    gateSaleCount: { type: Number, required: true, min: 0, default: 0 },
     ticketCount: { type: Number, required: true, min: 0, default: 0 },
     countersInitialized: { type: Boolean, required: true, default: false },
     tierCaps: {
-      earlyBird: { type: Number, required: true, min: 0, default: 25 },
-      regular: { type: Number, required: true, min: 0, default: 50 },
-      late: { type: Number, required: true, min: 0, default: 45 },
+      earlyBird: { type: Number, required: true, min: 0, default: 20 },
+      regular: { type: Number, required: true, min: 0, default: 55 },
+      late: { type: Number, required: true, min: 0, default: 25 },
+      atGate: { type: Number, required: true, min: 0, default: 20 },
     },
   },
   { collection: "events", versionKey: false },
@@ -22,7 +25,7 @@ const eventSchema = new Schema(
 const ticketSchema = new Schema(
   {
     name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, lowercase: true, trim: true },
+    email: { type: String, lowercase: true, trim: true },
     ticketCode: {
       type: String,
       required: true,
@@ -34,14 +37,19 @@ const ticketSchema = new Schema(
     ticketTier: {
       type: String,
       required: true,
-      enum: ["earlyBird", "regular", "late"],
+      enum: ["earlyBird", "regular", "late", "atGate", "lateLate"],
     },
     amountPaidCents: {
       type: Number,
       required: true,
-      enum: [0, 1800, 2200, 2600],
+      enum: [0, 1500, 1800, 2200, 2500, 2600, 2800],
     },
     currency: { type: String, required: true, default: "eur", lowercase: true },
+    paymentMethod: {
+      type: String,
+      enum: ["card", "cash", "complimentary"],
+      default: "card",
+    },
     stripeSessionId: { type: String },
     stripePaymentIntentId: { type: String },
     isPaid: { type: Boolean, required: true, default: true },

@@ -62,7 +62,7 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
       <h2 className="font-serif text-2xl text-[#15294b]">Buy an admission ticket</h2>
       <p className="mt-2 text-sm leading-relaxed text-[#62645f]">
         {soldOut
-          ? "All 120 tickets have been sold."
+          ? "Online sales are closed. At-gate tickets may still be available in person; cash only."
           : "Enter your details to continue to secure card checkout. Your ticket is created only after payment succeeds."}
       </p>
       <form className="mt-5 grid gap-4" onSubmit={handleSubmit}>
@@ -96,7 +96,8 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
           />
           <span>
             I agree to provide my name and email to process my ticket purchase
-            and receive my admission ticket.
+            and receive my admission ticket. I understand all ticket sales are
+            final and non-refundable.
           </span>
         </label>
         <button
@@ -104,7 +105,7 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
           disabled={busy || soldOut}
           type="submit"
         >
-          {soldOut ? "Sold out" : busy ? "Opening checkout…" : "Continue to payment"}
+          {soldOut ? "Online sales closed" : busy ? "Opening checkout…" : "Continue to payment"}
         </button>
       </form>
       {message && (
