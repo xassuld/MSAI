@@ -204,7 +204,7 @@ export async function handleStripeWebhook(
 
       const updatedEvent = await EventModel.findOneAndUpdate(
         { _id: "christmas", soldCount: { $lt: maxCapacity } },
-        { $inc: { soldCount: 1 } },
+        { $inc: { soldCount: 1, ticketCount: 1 } },
         { new: true, session: activeSession },
       );
       if (!updatedEvent) {
@@ -218,7 +218,7 @@ export async function handleStripeWebhook(
             name,
             email,
             ticketCode: generateTicketCode(),
-            ticketNumber: updatedEvent.soldCount,
+            ticketNumber: updatedEvent.ticketCount,
             ticketTier: tier,
             amountPaidCents,
             currency: checkoutSession.currency ?? "eur",

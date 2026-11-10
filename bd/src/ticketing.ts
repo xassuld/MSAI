@@ -39,21 +39,32 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
         maxCapacity: 120,
         tierCaps: { earlyBird: 25, regular: 50, late: 45 },
       },
-      $setOnInsert: { soldCount: 0 },
+      $setOnInsert: {
+        soldCount: 0,
+        ticketCount: 0,
+        countersInitialized: true,
+      },
     },
     { upsert: true },
   );
 
-  const currentEvent = await EventModel.findById("christmas")
-    .select("soldCount")
-    .lean();
-  if (currentEvent?.soldCount === undefined) {
-    const admissionTicketCount = await TicketModel.countDocuments({
+  const [paidTicketCount, latestTicket] = await Promise.all([
+    TicketModel.countDocuments({ isPaid: true }),
+    TicketModel.findOne({
       $or: [{ isPaid: true }, { isComplimentary: true }],
-    });
-    await EventModel.updateOne(
-      { _id: "christmas", soldCount: { $exists: false } },
-      { $set: { soldCount: admissionTicketCount } },
-    );
-  }
+    })
+      .sort({ ticketNumber: -1 })
+      .select("ticketNumber")
+      .lean(),
+  ]);
+  await EventModel.updateOne(
+    { _id: "christmas", countersInitialized: { $ne: true } },
+    {
+      $set: {
+        soldCount: paidTicketCount,
+        ticketCount: latestTicket?.ticketNumber ?? 0,
+        countersInitialized: true,
+      },
+    },
+  );
 }

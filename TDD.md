@@ -25,8 +25,10 @@ paid ticket number, not a calendar date:
 | 26-75 | Regular | €22 |
 | 76-120 | Late | €26 |
 
-`events` stores the `christmas` event with `maxCapacity`, `soldCount`, and tier
-caps of 25, 50, and 45. `soldCount` increments only when a verified paid
+`events` stores the `christmas` event with `maxCapacity`, `soldCount`,
+`ticketCount`, and tier caps of 25, 50, and 45. `soldCount` counts paid tickets
+for capacity and pricing; `ticketCount` allocates unique sequential numbers to
+all tickets. `soldCount` increments only when a verified paid
 Checkout session is fulfilled. Checkout creation never reserves a ticket or
 increments the count. Attempts to start checkout when sold out return HTTP 409.
 If more paid sessions complete than remaining spots, the webhook transaction
@@ -55,9 +57,9 @@ ticket emails remain retryable through Stripe webhook delivery without creating
 a duplicate ticket. MongoDB transactions require Atlas or a replica set.
 
 Admins can issue complimentary tickets from the ticket recipients page. These
-reserve capacity, are marked complimentary rather than paid, and can be checked
-in. Email delivery failures leave the ticket intact and can be retried from the
-admin ticket list.
+do not count toward the 120 paid-ticket capacity, are marked complimentary
+rather than paid, and can be checked in. Email delivery failures leave the
+ticket intact and can be retried from the admin ticket list.
 
 The ticket collection is `christmas_admission_tickets`. Email addresses are
 trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.
@@ -74,12 +76,15 @@ updated ticket indexes.
   iron-session, and atomically marks a verified paid or complimentary ticket
   as checked in. Repeat scans return HTTP 409.
 - `POST /api/admin/tickets/complimentary` creates and emails a complimentary
-  ticket to the supplied attendee name and email, reserving one capacity spot.
+  ticket to the supplied attendee name and email without consuming paid-ticket
+  capacity.
 - `POST /api/admin/tickets/:ticketNumber/resend` retries email delivery for an
   unsent complimentary ticket.
 - The admin recipient list can delete the latest unscanned complimentary or
-  Sandbox ticket. Deletion invalidates its code and reopens its last spot; paid
-  live tickets cannot be deleted through this action.
+  Sandbox ticket. Deletion invalidates its code; deleting a Sandbox ticket
+  reopens its paid capacity spot, while deleting a complimentary ticket does
+  not affect paid capacity. Paid live tickets cannot be deleted through this
+  action.
 - Admin event editing, ticket reporting, and event poster upload remain
   authenticated.
 

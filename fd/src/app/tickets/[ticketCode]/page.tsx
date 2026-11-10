@@ -78,7 +78,13 @@ export default async function TicketPage({
             <p className="text-[11px] font-bold uppercase tracking-[.2em] text-[#e4c77e]">
               Ticket type
             </p>
-            <p className="mt-2 text-5xl font-black tracking-tight sm:text-6xl">
+            <p
+              className={`mt-2 text-center font-black leading-none tracking-tight ${
+                ticket.isComplimentary
+                  ? "whitespace-nowrap text-[clamp(1.25rem,7vw,3.75rem)]"
+                  : "text-5xl sm:text-6xl"
+              }`}
+            >
               {ticketType}
             </p>
             <p className="mt-3 text-sm text-[#d9e1eb]">

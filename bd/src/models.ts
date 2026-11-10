@@ -8,6 +8,8 @@ const eventSchema = new Schema(
     title: { type: String, required: true },
     maxCapacity: { type: Number, required: true, min: 1, default: 120 },
     soldCount: { type: Number, required: true, min: 0, default: 0 },
+    ticketCount: { type: Number, required: true, min: 0, default: 0 },
+    countersInitialized: { type: Boolean, required: true, default: false },
     tierCaps: {
       earlyBird: { type: Number, required: true, min: 0, default: 25 },
       regular: { type: Number, required: true, min: 0, default: 50 },
@@ -28,7 +30,7 @@ const ticketSchema = new Schema(
       maxlength: 8,
       match: /^[A-Z0-9]{8}$/,
     },
-    ticketNumber: { type: Number, required: true, min: 1, max: 120 },
+    ticketNumber: { type: Number, required: true, min: 1 },
     ticketTier: {
       type: String,
       required: true,

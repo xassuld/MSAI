@@ -175,8 +175,11 @@ app.get("/api/events/christmas", async (_request, response, next) => {
     const event = await getChristmasEvent();
     await ensureChristmasEventState(event);
     await mongooseReady;
-    const registrationState = await EventModel.findById("christmas").lean();
+    const registrationState = await EventModel.findById("christmas")
+      .select("soldCount ticketCount")
+      .lean();
     const soldCount = registrationState?.soldCount ?? 0;
+    const ticketCount = registrationState?.ticketCount ?? 0;
     const activeTier =
       soldCount < 25
         ? { name: "Early Bird", price: 18, remaining: 25 - soldCount }
@@ -189,7 +192,7 @@ app.get("/api/events/christmas", async (_request, response, next) => {
       ...event,
       maxCapacity: 120,
       soldCount,
-      totalRegistered: soldCount,
+      totalRegistered: ticketCount,
       isSoldOut: soldCount >= 120,
       activeTier,
     });
@@ -324,14 +327,16 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
 
     const event = await getChristmasEvent();
     await ensureChristmasEventState(event);
-    const soldCount = (await EventModel.findById("christmas").select("soldCount").lean())
-      ?.soldCount ?? 0;
+    const registrationState = await EventModel.findById("christmas")
+      .select("soldCount ticketCount")
+      .lean();
+    const soldCount = registrationState?.soldCount ?? 0;
     response.set("Cache-Control", "no-store");
     response.json({
       ...event,
       maxCapacity: 120,
       soldCount,
-      totalRegistered: soldCount,
+      totalRegistered: registrationState?.ticketCount ?? 0,
     });
   } catch (error) {
     next(error);
@@ -410,27 +415,23 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
     await ensureChristmasEventState(await getChristmasEvent());
     const mongoSession = await mongoose.startSession();
     let ticket: TicketDocument | undefined;
-    let soldOut = false;
     try {
       await mongoSession.withTransaction(async () => {
         const updatedEvent = await EventModel.findOneAndUpdate(
-          { _id: "christmas", soldCount: { $lt: 120 } },
-          { $inc: { soldCount: 1 } },
+          { _id: "christmas" },
+          { $inc: { ticketCount: 1 } },
           { new: true, session: mongoSession },
         );
-        if (!updatedEvent) {
-          soldOut = true;
-          return;
-        }
+        if (!updatedEvent) throw new Error("Christmas event state was not initialized.");
 
-        const tier = resolveTicketTier(updatedEvent.soldCount - 1);
+        const tier = resolveTicketTier(updatedEvent.soldCount);
         [ticket] = await TicketModel.create(
           [
             {
               name,
               email,
               ticketCode: generateTicketCode(),
-              ticketNumber: updatedEvent.soldCount,
+              ticketNumber: updatedEvent.ticketCount,
               ticketTier: tier.key,
               amountPaidCents: 0,
               currency: "eur",
@@ -445,10 +446,6 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
       await mongoSession.endSession();
     }
 
-    if (soldOut) {
-      response.status(409).json({ error: "Event is completely sold out." });
-      return;
-    }
     if (!ticket) {
       throw new Error("Complimentary ticket transaction completed without creating a ticket.");
     }
@@ -502,7 +499,7 @@ app.post("/api/admin/tickets/:ticketNumber/resend", async (request, response, ne
     }
 
     const ticketNumber = Number(request.params.ticketNumber);
-    if (!Number.isInteger(ticketNumber) || ticketNumber < 1 || ticketNumber > 120) {
+    if (!Number.isSafeInteger(ticketNumber) || ticketNumber < 1) {
       response.status(400).json({ error: "Enter a valid ticket number." });
       return;
     }
@@ -563,7 +560,7 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
     }
 
     const ticketNumber = Number(request.params.ticketNumber);
-    if (!Number.isInteger(ticketNumber) || ticketNumber < 1 || ticketNumber > 120) {
+    if (!Number.isSafeInteger(ticketNumber) || ticketNumber < 1) {
       response.status(400).json({ error: "Enter a valid ticket number." });
       return;
     }
@@ -594,9 +591,12 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
           return;
         }
 
+        const ticketCountUpdate = ticket.isPaid
+          ? { ticketCount: -1, soldCount: -1 }
+          : { ticketCount: -1 };
         const event = await EventModel.findOneAndUpdate(
-          { _id: "christmas", soldCount: ticketNumber },
-          { $inc: { soldCount: -1 } },
+          { _id: "christmas", ticketCount: ticketNumber },
+          { $inc: ticketCountUpdate },
           { new: true, session: mongoSession },
         );
         if (!event) {
@@ -629,7 +629,7 @@ app.delete("/api/admin/tickets/:ticketNumber", async (request, response, next) =
       response.status(409).json({ error: "A checked-in ticket cannot be deleted." });
     } else {
       response.status(409).json({
-        error: "Only the latest sold ticket can be deleted so capacity and ticket numbers remain consistent.",
+        error: "Only the latest ticket can be deleted so capacity and ticket numbers remain consistent.",
       });
     }
   } catch (error) {
