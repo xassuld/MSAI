@@ -66,13 +66,26 @@ export async function sendAdmissionTicket(
     atGate: "At-gate",
     lateLate: "At-gate",
   };
-  const ticketType = isComplimentary ? "Complimentary" : tierLabels[ticketTier];
+  const ticketType = isComplimentary ? "VIP" : tierLabels[ticketTier];
   const ticketPrice = (amountPaidCents / 100).toFixed(2);
   const paymentDescription = isComplimentary
-    ? "Complimentary admission — no payment required"
+    ? "VIP admission — no payment required"
     : `Amount paid: €${ticketPrice}`;
   const safeTicketType = escapeHtml(ticketType);
   const safePartyDescription = escapeHtml(event.partyDescription);
+  const ticketCardStyle = isComplimentary
+    ? "margin:24px 0;border:2px solid #d4af37;border-radius:12px;border-collapse:separate;background:#fff8df"
+    : "margin:24px 0;border:1px solid #c7b995;border-radius:12px;border-collapse:separate;background:#fffdf8";
+  const ticketHeaderStyle = isComplimentary
+    ? "padding:10px 16px;background:#d4af37;border-radius:10px 10px 0 0"
+    : "padding:10px 16px;background:#15294b;border-radius:11px 11px 0 0";
+  const ticketHeaderTextColor = isComplimentary ? "#15294b" : "#fffdf8";
+  const ticketPassLabel = isComplimentary
+    ? "MSAI · VIP GOLDEN PASS"
+    : "MSAI · EVENT PASS";
+  const ticketTypeMarkup = isComplimentary
+    ? '<span style="display:inline-block;margin-top:5px;padding:5px 14px;border-radius:999px;background:#e4c77e;color:#15294b;font-family:Georgia,serif;font-size:17px;font-weight:bold;letter-spacing:2px">VIP</span>'
+    : safeTicketType;
   const frontendUrl = process.env.FRONTEND_URL;
   if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
   const baseUrl = frontendUrl.replace(/\/+$/, "");
@@ -114,13 +127,13 @@ export async function sendAdmissionTicket(
       <p style="margin:0;color:#80643a;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase">Mongolian Students' Association in Italy</p>
       <h1 style="margin:24px 0 8px;font-family:Georgia,serif;font-size:32px">${safeTitle}</h1>
       <p>Hello ${safeName}, your admission is confirmed.</p>
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:24px 0;border:1px solid #c7b995;border-radius:12px;border-collapse:separate;background:#fffdf8">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="${ticketCardStyle}">
         <tr>
-          <td colspan="2" style="padding:10px 16px;background:#15294b;border-radius:11px 11px 0 0">
+          <td colspan="2" style="${ticketHeaderStyle}">
             <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
               <tr>
-                <td style="color:#fffdf8;font-size:11px;font-weight:bold;letter-spacing:2px">ADMISSION TICKET</td>
-                <td align="right" style="color:#e4c77e;font-size:10px;font-weight:bold;letter-spacing:1px">MSAI · EVENT PASS</td>
+                <td style="color:${ticketHeaderTextColor};font-size:11px;font-weight:bold;letter-spacing:2px">${isComplimentary ? "VIP ADMISSION" : "ADMISSION TICKET"}</td>
+                <td align="right" style="color:${ticketHeaderTextColor};font-size:10px;font-weight:bold;letter-spacing:1px">${ticketPassLabel}</td>
               </tr>
             </table>
           </td>
@@ -130,7 +143,7 @@ export async function sendAdmissionTicket(
             <p style="margin:0 0 5px;color:#80643a;font-size:9px;font-weight:bold;letter-spacing:1.5px;text-transform:uppercase">Christmas gathering</p>
             <p style="margin:0 0 12px;font-family:Georgia,serif;font-size:18px;font-weight:bold;line-height:1.2">${safeTitle}</p>
             <p style="margin:0 0 12px;font-family:monospace;font-size:17px;font-weight:bold;letter-spacing:.5px;overflow-wrap:anywhere">${safeTicketCode}</p>
-            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TICKET TYPE</strong><br>${safeTicketType}</p>
+            <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TICKET TYPE</strong><br>${ticketTypeMarkup}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">DATE</strong><br>${safeDate}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">TIME</strong><br>${safeTime}</p>
             <p style="margin:6px 0;font-size:12px;line-height:1.4;overflow-wrap:anywhere"><strong style="color:#80643a;font-size:10px;letter-spacing:.5px">LOCATION</strong><br>${safeLocation}</p>
@@ -138,13 +151,13 @@ export async function sendAdmissionTicket(
           </td>
           <td width="52%" valign="middle" style="padding:12px 10px;border-left:1px dashed #c7b995;text-align:center">
             <p style="margin:0 0 10px;color:#80643a;font-size:10px;font-weight:bold;letter-spacing:1px">SCAN TO VIEW TICKET</p>
-            <img src="cid:event-signup-qr" alt="QR code to open the admission ticket for ${safeTicketCode}" width="168" height="168" style="display:block;width:168px;height:168px;max-width:100%;margin:0 auto;padding:8px;box-sizing:border-box;background:#fff;border:1px solid #c7b995;border-radius:8px">
+            <img src="cid:event-signup-qr" alt="QR code to open the admission ticket for ${safeTicketCode}" width="168" height="168" style="display:block;width:168px;height:168px;max-width:100%;margin:0 auto;padding:8px;box-sizing:border-box;background:#fff;border:1px solid ${isComplimentary ? "#d4af37" : "#c7b995"};border-radius:8px">
             <p style="margin:8px 0 0;color:#535044;font-size:10px">Ticket code: ${safeTicketCode}</p>
           </td>
         </tr>
       </table>
       <p style="font-size:14px;line-height:1.6">Please show this email or your ticket code at the event.</p>
-      <p style="font-size:14px;line-height:1.6"><strong>${isComplimentary ? "Admission:" : "Amount paid:"}</strong> ${isComplimentary ? "Complimentary — no payment required" : `€${ticketPrice}`}</p>
+      <p style="font-size:14px;line-height:1.6"><strong>${isComplimentary ? "Admission:" : "Amount paid:"}</strong> ${isComplimentary ? "VIP — no payment required" : `€${ticketPrice}`}</p>
       ${isComplimentary ? "" : '<p style="padding:10px 12px;border:1px solid #e6c6bd;border-radius:8px;background:#f0ded6;color:#923a35;font-size:13px;font-weight:bold">All ticket sales are final. No refunds.</p>'}
       <p style="font-size:14px;line-height:1.6"><strong>What&apos;s included:</strong> ${safePartyDescription}</p>
       <p style="font-size:12px"><a href="${ticketUrl}" style="color:#15294b">Open your online ticket and QR code</a></p>
@@ -164,7 +177,7 @@ export async function sendAdmissionTicket(
   const mimeMessage = [
     `From: MSAI Events <${sender}>`,
     `To: ${recipient}`,
-    "Subject: Your admission ticket for the MSAI Christmas event",
+    `Subject: ${isComplimentary ? "Your VIP golden ticket" : "Your admission ticket"} for the MSAI Christmas event`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/related; boundary="${relatedBoundary}"`,
     "",
