@@ -322,6 +322,9 @@ export default function AdminTicketsPage() {
           <span className="rounded-full bg-[#f0ded6] px-3 py-1 text-[#923a35]">
             Red · Late
           </span>
+          <span className="rounded-full bg-[#343a40] px-3 py-1 text-white">
+            Charcoal · At-gate
+          </span>
         </div>
 
         <form
@@ -527,11 +530,12 @@ export default function AdminTicketsPage() {
                               ? "bg-[#dce5d6] text-[#24523c]"
                               : ticket.ticketTier === "regular"
                                 ? "bg-[#ebe1cd] text-[#71572e]"
-                                : ticket.ticketTier === "late" ||
-                                    ticket.ticketTier === "atGate" ||
-                                    ticket.ticketTier === "lateLate"
-                                  ? "bg-[#f0ded6] text-[#923a35]"
-                                  : "bg-[#e8dfcf] text-[#62645f]"
+                                : ticket.ticketTier === "late"
+                                    ? "bg-[#f0ded6] text-[#923a35]"
+                                    : ticket.ticketTier === "atGate" ||
+                                        ticket.ticketTier === "lateLate"
+                                      ? "bg-[#343a40] text-white"
+                                    : "bg-[#e8dfcf] text-[#62645f]"
                           }`}
                         >
                           {ticket.isComplimentary

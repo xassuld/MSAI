@@ -79,7 +79,11 @@ export default async function TicketPage({
 
           <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-stretch">
             <div>
-              <div className="rounded-2xl bg-[#15294b] px-5 py-7 text-center text-[#fffdf8]">
+              <div
+                className={`rounded-2xl px-5 py-7 text-center text-[#fffdf8] ${
+                  ticket.isGateSale ? "bg-[#343a40]" : "bg-[#15294b]"
+                }`}
+              >
                 <p className="text-[11px] font-bold uppercase tracking-[.2em] text-[#e4c77e]">
                   Ticket type
                 </p>

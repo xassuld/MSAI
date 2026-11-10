@@ -214,11 +214,11 @@ export default async function ChristmasPage() {
                   {ticketTiers.map((tier) => (
                     <div
                       className={`rounded-xl border px-3 py-3 ${
-                        tier.key === "atGate" ? "sm:col-span-3" : ""
-                      } ${
-                        activeTicket?.key === tier.key
-                          ? "border-[#24523c] bg-white/70"
-                          : "border-[#24523c]/15 bg-white/35"
+                        tier.key === "atGate"
+                          ? "border-[#343a40] bg-[#343a40] text-[#fffdf8] sm:col-span-3"
+                          : activeTicket?.key === tier.key
+                            ? "border-[#24523c] bg-white/70"
+                            : "border-[#24523c]/15 bg-white/35"
                       }`}
                       key={tier.key}
                     >
@@ -226,7 +226,13 @@ export default async function ChristmasPage() {
                       <p className="mt-1 text-xl font-semibold">
                         {formatPrice(event.ticketPrices[tier.priceKey] / 100)}
                       </p>
-                      <p className="mt-1 text-[10px] leading-relaxed text-[#24523c]/75">
+                      <p
+                        className={`mt-1 text-[10px] leading-relaxed ${
+                          tier.key === "atGate"
+                            ? "text-white/75"
+                            : "text-[#24523c]/75"
+                        }`}
+                      >
                         {tier.ticketRange}
                       </p>
                     </div>
