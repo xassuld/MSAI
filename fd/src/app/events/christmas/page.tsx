@@ -93,8 +93,8 @@ export default async function ChristmasPage() {
           <span className="flex-1 bg-[#cf4d4d]" />
         </div>
 
-        <div className="grid items-stretch lg:grid-cols-[1fr_0.92fr]">
-          <section className="order-2 flex flex-col px-7 py-8 sm:px-12 sm:py-11 lg:order-1 lg:px-14 lg:py-12">
+        <div className="grid items-stretch bg-[#e8dfcf] lg:grid-cols-[1fr_0.92fr]">
+          <section className="order-2 flex flex-col bg-[#f7f2e8] px-7 py-8 sm:px-12 sm:py-11 lg:order-1 lg:col-start-1 lg:row-start-1 lg:px-14 lg:py-12">
             <Link
               className="inline-flex w-fit items-center rounded-full border border-[#15294b]/20 px-4 py-2 text-[10px] font-semibold uppercase tracking-[.12em] text-[#15294b] transition hover:bg-[#e8dfd0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#15294b]"
               href="/"
@@ -180,8 +180,8 @@ export default async function ChristmasPage() {
                   Pay securely online — your ticket is issued after payment
                 </p>
               </div>
-              <p className="rounded-xl border border-[#923a35]/20 bg-[#f0ded6] px-4 py-3 text-center text-xs font-bold text-[#923a35]">
-                All ticket sales are final. No refunds.
+              <p className="whitespace-nowrap rounded-xl border border-[#923a35]/25 bg-[#f0ded6] px-3 py-3 text-center text-[11px] font-semibold text-[#7d302c] sm:px-4 sm:text-sm">
+                Important · All ticket sales are final · No refunds
               </p>
               {event.partyDescription && (
                 <div className="rounded-2xl border border-[#c7b995] bg-[#fffdf8]/70 px-5 py-4">
@@ -208,6 +208,8 @@ export default async function ChristmasPage() {
                   {ticketTiers.map((tier) => (
                     <div
                       className={`rounded-xl border px-3 py-3 ${
+                        tier.key === "atGate" ? "sm:col-span-3" : ""
+                      } ${
                         activeTicket?.key === tier.key
                           ? "border-[#24523c] bg-white/70"
                           : "border-[#24523c]/15 bg-white/35"
@@ -231,80 +233,80 @@ export default async function ChristmasPage() {
                       : "Sold out — all 120 admission tickets have been issued."
                     : `${event.activeTier?.name ?? "Tickets"} · ${event.activeTier?.remaining ?? 0} tickets remaining`}
                 </p>
-                <p className="mt-2 text-xs">
-                  {event.gateTicketsRemaining} At-gate tickets remain. Available
-                  in person at any time while supplies last. Cash only · €28.
-                </p>
               </div>
             </section>
-
-            <RsvpForm soldOut={event.isSoldOut} />
 
             <p className="mt-auto pt-10 text-[9px] font-medium uppercase tracking-[.16em] text-[#77786f]">
               Mongolia <span className="px-1 text-[#c59d50]">×</span> Italia
             </p>
           </section>
 
-          <section
-            aria-label="Event poster"
-            className="relative order-1 flex flex-col items-center justify-center overflow-hidden bg-[#e8dfcf] px-7 py-9 sm:px-12 lg:order-2 lg:px-10 lg:py-12"
-          >
-            <div
-              aria-hidden="true"
-              className="absolute -right-24 -top-24 h-72 w-72 rounded-full border border-[#c5b696]/50"
-            />
-            <div
-              aria-hidden="true"
-              className="absolute -bottom-28 -left-24 h-72 w-72 rounded-full border border-[#c5b696]/50"
-            />
-            <p className="relative mb-4 text-[9px] font-bold uppercase tracking-[.2em] text-[#80643a]">
-              The event poster
-            </p>
-            <div className="relative w-full max-w-[390px] rotate-[1deg] rounded-[3px] bg-white p-2 shadow-[0_22px_45px_rgb(37_35_28/24%)] sm:p-[10px]">
-              <div className="relative aspect-[210/297] overflow-hidden bg-[#f3ecdf]">
-                {event.posterUrl ? (
-                  <Image
-                    alt={`${event.title} event poster`}
-                    className="h-full w-full object-contain"
-                    fill
-                    priority
-                    sizes="(max-width: 768px) 85vw, 390px"
-                    src={event.posterUrl}
-                    unoptimized
-                  />
-                ) : (
-                  <div className="flex h-full flex-col items-center justify-center px-8 text-center">
-                    <svg className="h-[68px] w-[68px]" viewBox="0 0 80 80" fill="none">
-                      <path
-                        d="M40 11 26 31h8L21 46h13L19 62h42L46 46h13L46 31h8L40 11Z"
-                        fill="#28563f"
-                      />
-                      <path d="M36 62h8v9h-8z" fill="#805d40" />
-                      <path
-                        d="m40 8 1.8 4 4.3.4-3.2 2.8 1 4.2-3.9-2.2-3.8 2.2.9-4.2-3.2-2.8 4.3-.4L40 8Z"
-                        fill="#c59d50"
-                      />
-                      <circle cx="34" cy="37" r="2" fill="#cf4d4d" />
-                      <circle cx="46" cy="47" r="2" fill="#c59d50" />
-                      <circle cx="34" cy="54" r="2" fill="#cf4d4d" />
-                    </svg>
-                    <p className="mt-6 text-[9px] font-bold uppercase tracking-[.2em] text-[#24523c]">
-                      You&apos;re invited
-                    </p>
-                    <h2 className="mt-3 font-serif text-3xl leading-tight text-[#15294b]">
-                      {event.title}
-                    </h2>
-                    <p className="mt-4 text-xs leading-relaxed text-[#666256]">
-                      Official poster coming soon
-                    </p>
-                  </div>
-                )}
+          <div className="contents lg:col-start-2 lg:row-start-1 lg:flex lg:flex-col">
+            <section
+              aria-label="Event poster"
+              className="relative order-1 flex flex-col items-center justify-center overflow-hidden bg-[#e8dfcf] px-7 py-9 sm:px-12 lg:order-1 lg:justify-start lg:px-10 lg:py-12"
+            >
+              <div
+                aria-hidden="true"
+                className="absolute -right-24 -top-24 h-72 w-72 rounded-full border border-[#c5b696]/50"
+              />
+              <div
+                aria-hidden="true"
+                className="absolute -bottom-28 -left-24 h-72 w-72 rounded-full border border-[#c5b696]/50"
+              />
+              <p className="relative mb-4 text-[9px] font-bold uppercase tracking-[.2em] text-[#80643a]">
+                The event poster
+              </p>
+              <div className="relative w-full max-w-[390px] rotate-[1deg] rounded-[3px] bg-white p-2 shadow-[0_22px_45px_rgb(37_35_28/24%)] sm:p-[10px]">
+                <div className="relative aspect-[210/297] overflow-hidden bg-[#f3ecdf]">
+                  {event.posterUrl ? (
+                    <Image
+                      alt={`${event.title} event poster`}
+                      className="h-full w-full object-contain"
+                      fill
+                      priority
+                      sizes="(max-width: 768px) 85vw, 390px"
+                      src={event.posterUrl}
+                      unoptimized
+                    />
+                  ) : (
+                    <div className="flex h-full flex-col items-center justify-center px-8 text-center">
+                      <svg className="h-[68px] w-[68px]" viewBox="0 0 80 80" fill="none">
+                        <path
+                          d="M40 11 26 31h8L21 46h13L19 62h42L46 46h13L46 31h8L40 11Z"
+                          fill="#28563f"
+                        />
+                        <path d="M36 62h8v9h-8z" fill="#805d40" />
+                        <path
+                          d="m40 8 1.8 4 4.3.4-3.2 2.8 1 4.2-3.9-2.2-3.8 2.2.9-4.2-3.2-2.8 4.3-.4L40 8Z"
+                          fill="#c59d50"
+                        />
+                        <circle cx="34" cy="37" r="2" fill="#cf4d4d" />
+                        <circle cx="46" cy="47" r="2" fill="#c59d50" />
+                        <circle cx="34" cy="54" r="2" fill="#cf4d4d" />
+                      </svg>
+                      <p className="mt-6 text-[9px] font-bold uppercase tracking-[.2em] text-[#24523c]">
+                        You&apos;re invited
+                      </p>
+                      <h2 className="mt-3 font-serif text-3xl leading-tight text-[#15294b]">
+                        {event.title}
+                      </h2>
+                      <p className="mt-4 text-xs leading-relaxed text-[#666256]">
+                        Official poster coming soon
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
+              <p className="relative mt-5 text-[9px] font-medium uppercase tracking-[.16em] text-[#77786f]">
+                Mongolia <span className="px-1 text-[#c59d50]">×</span> Italia
+              </p>
+            </section>
+
+            <div className="order-3 bg-[#e8dfcf] px-7 pb-8 sm:px-12 sm:pb-11 lg:order-2 lg:px-10 lg:pb-12">
+              <RsvpForm soldOut={event.isSoldOut} />
             </div>
-            <p className="relative mt-5 text-[9px] font-medium uppercase tracking-[.16em] text-[#77786f]">
-              Mongolia <span className="px-1 text-[#c59d50]">×</span> Italia
-            </p>
-          </section>
+          </div>
         </div>
       </article>
     </main>
