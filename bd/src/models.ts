@@ -94,6 +94,12 @@ export function ensureTicketIndexes(): Promise<void> {
     if (uniqueEmailIndex?.name) {
       await TicketModel.collection.dropIndex(uniqueEmailIndex.name);
     }
+    const obsoleteRegistrationNumberIndex = indexes.find(
+      (index) => index.unique && index.key.registrationNumber === 1,
+    );
+    if (obsoleteRegistrationNumberIndex?.name) {
+      await TicketModel.collection.dropIndex(obsoleteRegistrationNumberIndex.name);
+    }
     await TicketModel.createIndexes();
   })();
   return ticketIndexesReady;

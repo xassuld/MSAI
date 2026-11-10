@@ -64,8 +64,8 @@ ticket intact and can be retried from the admin ticket list.
 The ticket collection is `christmas_admission_tickets`. Email addresses are
 trimmed/lowercase and indexed; ticket codes and Stripe session IDs are unique.
 Existing non-payment registrations are not considered paid and cannot be used
-for entry. The backend drops a legacy unique email index when initializing the
-updated ticket indexes.
+for entry. The backend drops legacy unique email and `registrationNumber`
+indexes when initializing the updated ticket indexes.
 
 ## API
 
