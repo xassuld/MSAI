@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 type AdminSection = "details" | "recipients" | "prices";
@@ -18,7 +17,6 @@ export default function AdminNavigation({
 }: {
   active: AdminSection;
 }) {
-  const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
 
@@ -31,8 +29,9 @@ export default function AdminNavigation({
         credentials: "include",
       });
       if (!response.ok) throw new Error("Could not sign out. Please retry.");
-      router.push("/admin");
-      router.refresh();
+      // Reload to discard cached authenticated state from any admin section.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = "/admin";
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not sign out.");
     } finally {
