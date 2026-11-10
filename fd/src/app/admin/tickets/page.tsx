@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import AdminNavigation from "../admin-navigation";
 
@@ -37,6 +38,7 @@ const ticketTierLabels = {
 } as const;
 
 export default function AdminTicketsPage() {
+  const router = useRouter();
   const [tickets, setTickets] = useState<SentTicketRecipient[] | null>(null);
   const [error, setError] = useState("");
   const [requiresLogin, setRequiresLogin] = useState(false);
@@ -289,6 +291,22 @@ export default function AdminTicketsPage() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (requiresLogin) router.replace("/admin");
+  }, [requiresLogin, router]);
+
+  if (requiresLogin) {
+    return (
+      <main className="min-h-screen px-4 py-10 sm:px-6">
+        <section className="mx-auto w-full max-w-[620px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#923a35] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
+          <p aria-live="polite" role="status">
+            Redirecting to admin sign-in…
+          </p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">

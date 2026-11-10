@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import AdminNavigation from "../admin-navigation";
 
@@ -38,6 +38,7 @@ function toPriceInputs(prices: TicketPrices): TicketPriceInputs {
 }
 
 export default function AdminPricesEditor() {
+  const router = useRouter();
   const [prices, setPrices] = useState<TicketPriceInputs | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -81,6 +82,10 @@ export default function AdminPricesEditor() {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!loading && !authenticated && !message) router.replace("/admin");
+  }, [authenticated, loading, message, router]);
 
   async function savePrices(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -161,15 +166,9 @@ export default function AdminPricesEditor() {
             Loading ticket prices…
           </p>
         ) : !authenticated ? (
-          <div className="rounded-2xl border border-[#c7b995] bg-white/50 p-5">
-            <p className="text-sm">Sign in to manage ticket prices.</p>
-            <Link
-              className="mt-4 inline-flex rounded-full bg-[#15294b] px-4 py-2 text-xs font-semibold text-[#f5efe3]"
-              href="/admin"
-            >
-              Go to Event details to sign in
-            </Link>
-          </div>
+          <p aria-live="polite" className="py-8 text-center text-sm text-[#62645f]" role="status">
+            Redirecting to admin sign-in…
+          </p>
         ) : (
           <form className="grid gap-5" onSubmit={savePrices}>
             {priceFields.map((field) => (
