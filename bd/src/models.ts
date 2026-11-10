@@ -18,6 +18,12 @@ const eventSchema = new Schema(
       late: { type: Number, required: true, min: 0, default: 25 },
       atGate: { type: Number, required: true, min: 0, default: 20 },
     },
+    ticketPrices: {
+      earlyBird: { type: Number, required: true, min: 1, default: 1500 },
+      regular: { type: Number, required: true, min: 1, default: 2500 },
+      late: { type: Number, required: true, min: 1, default: 2800 },
+      atGate: { type: Number, required: true, min: 1, default: 2800 },
+    },
   },
   { collection: "events", versionKey: false },
 );
@@ -42,7 +48,8 @@ const ticketSchema = new Schema(
     amountPaidCents: {
       type: Number,
       required: true,
-      enum: [0, 1500, 1800, 2200, 2500, 2600, 2800],
+      min: 0,
+      max: 1000000,
     },
     currency: { type: String, required: true, default: "eur", lowercase: true },
     paymentMethod: {

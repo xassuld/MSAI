@@ -8,6 +8,7 @@ import { EventModel, TicketModel, type TicketDocument } from "./models.js";
 import {
   ensureChristmasEventState,
   generateTicketCode,
+  getTicketPrices,
   resolveTicketTier,
   ticketTiers,
 } from "./ticketing.js";
@@ -68,7 +69,7 @@ export async function createCheckoutSession(
     await mongooseReady;
     await ensureChristmasEventState(await getChristmasEvent());
     const event = await EventModel.findById("christmas")
-      .select("soldCount onlineSoldCount")
+      .select("soldCount onlineSoldCount ticketPrices")
       .lean();
     const onlineSoldCount = event?.onlineSoldCount ?? 0;
     if (
@@ -79,7 +80,10 @@ export async function createCheckoutSession(
       return;
     }
 
-    const tier = resolveTicketTier(onlineSoldCount);
+    const tier = resolveTicketTier(
+      onlineSoldCount,
+      getTicketPrices(event?.ticketPrices),
+    );
     const frontendUrl = process.env.FRONTEND_URL;
     if (!frontendUrl) throw new Error("FRONTEND_URL is required.");
     const baseUrl = new URL(frontendUrl).origin;
@@ -105,6 +109,7 @@ export async function createCheckoutSession(
         name,
         email,
         tier: tier.key,
+        amountCents: String(tier.amountInCents),
       },
       success_url: `${baseUrl}/events/christmas/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/events/christmas`,
@@ -166,6 +171,9 @@ export async function handleStripeWebhook(
       ? checkoutSession.payment_intent
       : checkoutSession.payment_intent?.id;
 
+  const amountCents = metadata?.amountCents
+    ? Number(metadata.amountCents)
+    : undefined;
   if (
     metadata?.eventId !== "christmas" ||
     !metadata.name?.trim() ||
@@ -173,6 +181,8 @@ export async function handleStripeWebhook(
     !tierKey ||
     !Object.hasOwn(ticketTiers, tierKey) ||
     !Number.isInteger(checkoutSession.amount_total) ||
+    (amountCents !== undefined &&
+      (!Number.isSafeInteger(amountCents) || amountCents < 1)) ||
     !paymentIntentId
   ) {
     next(new Error("Paid Stripe Checkout session has invalid fulfillment metadata."));
@@ -180,7 +190,10 @@ export async function handleStripeWebhook(
   }
 
   const tier = tierKey as keyof typeof ticketTiers;
-  if (checkoutSession.amount_total !== ticketTiers[tier].amountInCents) {
+  if (
+    checkoutSession.amount_total !==
+    (amountCents ?? ticketTiers[tier].amountInCents)
+  ) {
     next(new Error("Paid Stripe Checkout session amount does not match its ticket tier."));
     return;
   }

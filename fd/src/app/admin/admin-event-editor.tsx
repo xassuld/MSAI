@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import AdminNavigation from "./admin-navigation";
 
 const adminApiUrl = "/api/admin";
 
@@ -348,6 +349,8 @@ export default function AdminEventEditor() {
           )}
         </div>
 
+        {authenticated && <AdminNavigation active="details" />}
+
         {checkingSession ? (
           <p aria-live="polite" className="py-8 text-center text-sm text-[#62645f]">
             Checking admin session…
@@ -574,12 +577,17 @@ export default function AdminEventEditor() {
 
             <fieldset className="grid gap-3 rounded-2xl border border-[#c7b995] bg-[#fffdf8]/60 p-4">
               <legend className="px-1 text-sm font-semibold text-[#15294b]">
-                Ticket pricing by tickets sold
+                Ticket pricing
               </legend>
-              <p className="text-sm text-[#15294b]">Tickets 1–20: Early Bird · €15</p>
-              <p className="text-sm text-[#15294b]">Tickets 21–75: Regular · €25</p>
-              <p className="text-sm text-[#15294b]">Tickets 76–100: Late · €28</p>
-              <p className="text-sm text-[#15294b]">Up to 20 At-gate tickets · €28 cash · available anytime</p>
+              <p className="text-sm text-[#62645f]">
+                Prices and the Stripe checkout amounts can be managed separately.
+              </p>
+              <Link
+                className="mt-1 inline-flex w-fit rounded-full border border-[#15294b]/20 px-4 py-2 text-xs font-semibold text-[#15294b] transition hover:bg-[#e8dfd0]"
+                href="/admin/prices"
+              >
+                Manage ticket prices
+              </Link>
             </fieldset>
 
             <div className="grid gap-2 text-sm font-semibold text-[#15294b]">

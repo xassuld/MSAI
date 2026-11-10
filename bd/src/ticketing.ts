@@ -9,10 +9,29 @@ export const ticketTiers = {
   late: { name: "Late", price: 28, amountInCents: 2800, end: 100 },
 } as const;
 
+export type TicketPrices = Record<keyof typeof ticketTiers | "atGate", number>;
+
+export const defaultTicketPrices: TicketPrices = {
+  earlyBird: 1500,
+  regular: 2500,
+  late: 2800,
+  atGate: 2800,
+};
+
+export function getTicketPrices(value: Partial<TicketPrices> | null | undefined): TicketPrices {
+  return {
+    earlyBird: value?.earlyBird ?? defaultTicketPrices.earlyBird,
+    regular: value?.regular ?? defaultTicketPrices.regular,
+    late: value?.late ?? defaultTicketPrices.late,
+    atGate: value?.atGate ?? defaultTicketPrices.atGate,
+  };
+}
+
 export type TicketTierName = keyof typeof ticketTiers | "atGate" | "lateLate";
 
 export function resolveTicketTier(
   soldCount: number,
+  prices: TicketPrices = defaultTicketPrices,
 ): { key: TicketTierName; name: string; price: number; amountInCents: number } {
   const key: keyof typeof ticketTiers =
     soldCount < 20
@@ -20,7 +39,12 @@ export function resolveTicketTier(
       : soldCount < 75
         ? "regular"
         : "late";
-  return { key, ...ticketTiers[key] };
+  return {
+    ...ticketTiers[key],
+    key,
+    price: prices[key] / 100,
+    amountInCents: prices[key],
+  };
 }
 
 export function generateTicketCode(): string {

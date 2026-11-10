@@ -22,31 +22,37 @@ type EventData = {
     price: number;
     remaining: number;
   } | null;
+  ticketPrices: {
+    earlyBird: number;
+    regular: number;
+    late: number;
+    atGate: number;
+  };
 };
 
 const ticketTiers = [
   {
     key: "earlyBird",
     name: "Early Bird",
-    price: 15,
+    priceKey: "earlyBird",
     ticketRange: "First 20 paid sales",
   },
   {
     key: "regular",
     name: "Regular",
-    price: 25,
+    priceKey: "regular",
     ticketRange: "Next 55 paid sales",
   },
   {
     key: "late",
     name: "Late",
-    price: 28,
+    priceKey: "late",
     ticketRange: "Next 25 paid sales",
   },
   {
     key: "atGate",
     name: "At-gate · Cash only",
-    price: 28,
+    priceKey: "atGate",
     ticketRange: "Up to 20 tickets · In-person only",
   },
 ] as const;
@@ -217,7 +223,9 @@ export default async function ChristmasPage() {
                       key={tier.key}
                     >
                       <p className="text-xs font-bold">{tier.name}</p>
-                      <p className="mt-1 text-xl font-semibold">{formatPrice(tier.price)}</p>
+                      <p className="mt-1 text-xl font-semibold">
+                        {formatPrice(event.ticketPrices[tier.priceKey] / 100)}
+                      </p>
                       <p className="mt-1 text-[10px] leading-relaxed text-[#24523c]/75">
                         {tier.ticketRange}
                       </p>

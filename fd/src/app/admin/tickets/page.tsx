@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
+import AdminNavigation from "../admin-navigation";
 
 const adminApiUrl = "/api/admin";
 
@@ -22,6 +23,9 @@ type TicketPreviewEvent = {
   time: string;
   location: string;
   partyDescription: string;
+  ticketPrices: {
+    atGate: number;
+  };
 };
 
 const ticketTierLabels = {
@@ -52,6 +56,7 @@ export default function AdminTicketsPage() {
     time: "",
     location: "",
     partyDescription: "",
+    ticketPrices: { atGate: 2800 },
   });
   const [resendingTicketNumber, setResendingTicketNumber] = useState<number | null>(
     null,
@@ -90,7 +95,7 @@ export default function AdminTicketsPage() {
       });
       const result = (await response.json()) as {
         error?: string;
-        ticket?: SentTicketRecipient;
+        ticket?: SentTicketRecipient & { amountPaidCents?: number };
       };
       if (result.ticket) upsertTicket(result.ticket);
       if (!response.ok) throw new Error(result.error ?? "Could not send complimentary ticket.");
@@ -122,14 +127,16 @@ export default function AdminTicketsPage() {
       });
       const result = (await response.json()) as {
         error?: string;
-        ticket?: SentTicketRecipient;
+        ticket?: SentTicketRecipient & { amountPaidCents?: number };
       };
       if (!response.ok) throw new Error(result.error ?? "Could not issue gate ticket.");
       if (!result.ticket) throw new Error("The server did not return the issued gate ticket.");
       upsertTicket(result.ticket);
       setGateName("");
       setActionMessage(
-        `€28 cash ticket #${result.ticket.ticketNumber} issued for ${result.ticket.name}. Entry authorized.`,
+        `${new Intl.NumberFormat("en", { style: "currency", currency: "EUR" }).format(
+          (result.ticket.amountPaidCents ?? previewEvent.ticketPrices.atGate) / 100,
+        )} cash ticket #${result.ticket.ticketNumber} issued for ${result.ticket.name}. Entry authorized.`,
       );
     } catch (cause) {
       setActionMessage(
@@ -251,7 +258,8 @@ export default function AdminTicketsPage() {
           typeof eventResult.date !== "string" ||
           typeof eventResult.time !== "string" ||
           typeof eventResult.location !== "string" ||
-          typeof eventResult.partyDescription !== "string"
+          typeof eventResult.partyDescription !== "string" ||
+          !eventResult.ticketPrices
         ) {
           throw new Error(eventResult.error ?? "Could not load ticket preview details.");
         }
@@ -263,6 +271,7 @@ export default function AdminTicketsPage() {
             time: eventResult.time,
             location: eventResult.location,
             partyDescription: eventResult.partyDescription,
+            ticketPrices: eventResult.ticketPrices,
           });
         }
       })
@@ -284,12 +293,7 @@ export default function AdminTicketsPage() {
   return (
     <main className="min-h-screen px-4 py-10 sm:px-6">
       <section className="mx-auto w-full max-w-[760px] rounded-[26px] border border-[#15294b]/20 bg-[#f3ecdf]/90 p-6 text-[#15294b] shadow-[0_20px_65px_rgb(21_41_75/12%)] sm:p-9">
-        <Link
-          className="inline-flex rounded-full border border-[#15294b]/20 px-4 py-2 text-xs font-semibold transition hover:bg-[#e8dfd0] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#15294b]"
-          href="/admin"
-        >
-          ← Back to admin
-        </Link>
+        <AdminNavigation active="recipients" />
         <p className="mt-8 text-[10px] font-bold uppercase tracking-[.2em] text-[#80643a]">
           MSAI · Admin
         </p>
@@ -319,7 +323,13 @@ export default function AdminTicketsPage() {
           onSubmit={issueGateTicket}
         >
           <div className="sm:col-span-2">
-            <h2 className="font-serif text-xl">Cash-only At-gate · €28</h2>
+            <h2 className="font-serif text-xl">
+              Cash-only At-gate ·{" "}
+              {new Intl.NumberFormat("en", {
+                style: "currency",
+                currency: "EUR",
+              }).format(previewEvent.ticketPrices.atGate / 100)}
+            </h2>
             <p className="mt-1 text-xs leading-relaxed text-[#62645f]">
               Available anytime for in-person sales. Collect cash and the
               attendee&apos;s name only; issuing the ticket immediately

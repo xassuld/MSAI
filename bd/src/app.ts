@@ -23,6 +23,7 @@ import { getAdminSession } from "./admin-session.js";
 import {
   ensureChristmasEventState,
   generateTicketCode,
+  getTicketPrices,
   resolveTicketTier,
 } from "./ticketing.js";
 import {
@@ -179,19 +180,20 @@ app.get("/api/events/christmas", async (_request, response, next) => {
     await ensureChristmasEventState(event);
     await mongooseReady;
     const registrationState = await EventModel.findById("christmas")
-      .select("soldCount onlineSoldCount gateSaleCount ticketCount")
+      .select("soldCount onlineSoldCount gateSaleCount ticketCount ticketPrices")
       .lean();
     const soldCount = registrationState?.soldCount ?? 0;
     const onlineSoldCount = registrationState?.onlineSoldCount ?? 0;
     const gateSaleCount = registrationState?.gateSaleCount ?? 0;
     const ticketCount = registrationState?.ticketCount ?? 0;
+    const ticketPrices = getTicketPrices(registrationState?.ticketPrices);
     const activeTier =
       onlineSoldCount < 20
-        ? { name: "Early Bird", price: 15, remaining: 20 - onlineSoldCount }
+        ? { name: "Early Bird", price: ticketPrices.earlyBird / 100, remaining: 20 - onlineSoldCount }
         : onlineSoldCount < 75
-          ? { name: "Regular", price: 25, remaining: 75 - onlineSoldCount }
+          ? { name: "Regular", price: ticketPrices.regular / 100, remaining: 75 - onlineSoldCount }
           : onlineSoldCount < 100
-            ? { name: "Late", price: 28, remaining: 100 - onlineSoldCount }
+            ? { name: "Late", price: ticketPrices.late / 100, remaining: 100 - onlineSoldCount }
             : null;
     response.json({
       ...event,
@@ -201,6 +203,7 @@ app.get("/api/events/christmas", async (_request, response, next) => {
       isSoldOut: onlineSoldCount >= 100 || soldCount >= 120,
       gateTicketsRemaining: Math.max(0, Math.min(20 - gateSaleCount, 120 - soldCount)),
       onlineTicketsRemaining: Math.max(0, Math.min(100 - onlineSoldCount, 120 - soldCount)),
+      ticketPrices,
       activeTier,
     });
   } catch (error) {
@@ -336,7 +339,7 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
     const event = await getChristmasEvent();
     await ensureChristmasEventState(event);
     const registrationState = await EventModel.findById("christmas")
-      .select("soldCount onlineSoldCount gateSaleCount ticketCount")
+      .select("soldCount onlineSoldCount gateSaleCount ticketCount ticketPrices")
       .lean();
     const soldCount = registrationState?.soldCount ?? 0;
     response.set("Cache-Control", "no-store");
@@ -345,6 +348,7 @@ app.get("/api/admin/events/christmas", async (request, response, next) => {
       maxCapacity: 120,
       soldCount,
       totalRegistered: registrationState?.ticketCount ?? 0,
+      ticketPrices: getTicketPrices(registrationState?.ticketPrices),
     });
   } catch (error) {
     next(error);
@@ -537,7 +541,7 @@ app.post("/api/admin/tickets/gate", async (request, response, next) => {
         );
         if (!updatedEvent) {
           const currentEvent = await EventModel.findById("christmas")
-            .select("soldCount gateSaleCount")
+            .select("soldCount gateSaleCount ticketPrices")
             .session(mongoSession)
             .lean();
           soldOut =
@@ -554,7 +558,7 @@ app.post("/api/admin/tickets/gate", async (request, response, next) => {
               ticketCode: generateTicketCode(),
               ticketNumber: updatedEvent.ticketCount,
               ticketTier: "atGate",
-              amountPaidCents: 2800,
+              amountPaidCents: getTicketPrices(updatedEvent.ticketPrices).atGate,
               currency: "eur",
               paymentMethod: "cash",
               isPaid: true,
@@ -583,6 +587,7 @@ app.post("/api/admin/tickets/gate", async (request, response, next) => {
         email: null,
         ticketNumber: ticket.ticketNumber,
         ticketTier: ticket.ticketTier,
+        amountPaidCents: ticket.amountPaidCents,
         isComplimentary: false,
         isSandbox: false,
         isGateSale: true,
@@ -844,6 +849,60 @@ app.put("/api/admin/events/christmas", async (request, response, next) => {
     const savedEvent = await saveChristmasEvent(fields);
     await ensureChristmasEventState(savedEvent);
     response.json({ ...savedEvent, soldCount });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.put("/api/admin/ticket-prices", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+
+  try {
+    const session = await getAdminSession(request, response);
+    if (!session.isAdmin) {
+      response.status(401).json({ error: "Admin login required." });
+      return;
+    }
+
+    const prices = request.body?.ticketPrices;
+    const priceKeys = ["earlyBird", "regular", "late", "atGate"] as const;
+    if (
+      !prices ||
+      typeof prices !== "object" ||
+      priceKeys.some(
+        (key) =>
+          !Number.isSafeInteger(prices[key]) ||
+          prices[key] < 1 ||
+          prices[key] > 1000000,
+      )
+    ) {
+      response.status(400).json({
+        error: "Enter prices from €0.01 to €10,000.00 for every ticket type.",
+      });
+      return;
+    }
+
+    const currentEvent = await getChristmasEvent();
+    await ensureChristmasEventState(currentEvent);
+    const updatedEvent = await EventModel.findOneAndUpdate(
+      { _id: "christmas" },
+      {
+        $set: {
+          ticketPrices: {
+            earlyBird: prices.earlyBird,
+            regular: prices.regular,
+            late: prices.late,
+            atGate: prices.atGate,
+          },
+        },
+      },
+      { new: true },
+    )
+      .select("ticketPrices")
+      .lean();
+
+    response.set("Cache-Control", "no-store");
+    response.json({ ticketPrices: getTicketPrices(updatedEvent?.ticketPrices) });
   } catch (error) {
     next(error);
   }

@@ -22,10 +22,10 @@ online paid-sale order, independently of gate sales:
 
 | Allocation | Tier | Price |
 |---|---|---:|
-| First 20 online paid sales | Early Bird | €15 |
-| Next 55 online paid sales | Regular | €25 |
-| Next 25 online paid sales | Late | €28 |
-| Up to 20 in-person sales, available anytime | At-gate (cash only) | €28 |
+| First 20 online paid sales | Early Bird | Admin-configurable |
+| Next 55 online paid sales | Regular | Admin-configurable |
+| Next 25 online paid sales | Late | Admin-configurable |
+| Up to 20 in-person sales, available anytime | At-gate (cash only) | Admin-configurable |
 
 `events` stores the `christmas` event with `maxCapacity`, total `soldCount`,
 `onlineSoldCount`, `gateSaleCount`, `ticketCount`, and tier caps of 20, 55, 25,
@@ -65,10 +65,16 @@ do not count toward the 120 paid-ticket capacity, are marked complimentary
 rather than paid, and can be checked in. Email delivery failures leave the
 ticket intact and can be retried from the admin ticket list.
 
-Cashiers can issue up to 20 €28 At-gate tickets at any time, independent of
+Cashiers can issue up to 20 At-gate tickets at any time, independent of
 online sales. The cashier collects cash and the attendee's name only; the
 ticket is created without an email and marked checked in immediately to
-authorize entry. Gate sales do not affect online tier pricing or availability.
+authorize entry. The At-gate price is admin-configurable. Gate sales do not
+affect online tier pricing or availability.
+
+Admins can update the four ticket prices from the Prices section in the admin
+navigation. Prices are stored as integer euro cents and changes apply to new
+checkout sessions. Existing Stripe Checkout sessions retain the price shown
+when they were created.
 
 The ticket collection is `christmas_admission_tickets`. Provided email
 addresses are trimmed/lowercase and indexed; ticket codes and Stripe session
@@ -81,14 +87,17 @@ indexes when initializing the updated ticket indexes.
 
 - `GET /api/events/christmas` returns event content, `maxCapacity`,
   total `soldCount`, online and At-gate tickets remaining, `isSoldOut`, and the
-  active online tier's name, price, and remaining quantity.
+  active online tier's name, price, and remaining quantity, plus all ticket
+  prices in cents.
+- `PUT /api/admin/ticket-prices` updates all ticket prices in cents and
+  requires the existing authenticated iron-session.
 - `POST /api/admin/tickets/check-in` requires the existing authenticated
   iron-session, and atomically marks a verified paid or complimentary ticket
   as checked in. Repeat scans return HTTP 409.
 - `POST /api/admin/tickets/complimentary` creates and emails a complimentary
   ticket to the supplied attendee name and email without consuming paid-ticket
   capacity.
-- `POST /api/admin/tickets/gate` issues a €28 cash-only At-gate ticket by
+- `POST /api/admin/tickets/gate` issues a cash-only At-gate ticket by
   attendee name at any time, checks it in immediately, and does not require or
   send email.
 - `POST /api/admin/tickets/:ticketNumber/resend` retries email delivery for an
