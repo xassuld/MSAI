@@ -18,10 +18,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background:
-    radial-gradient(ellipse at 0% 12%, rgb(48 111 75 / 10%), transparent 30rem),
-    radial-gradient(ellipse at 100% 86%, rgb(175 66 55 / 8%), transparent 34rem),
-    linear-gradient(135deg, #f1ece2, #e9e4d9 52%, #f2ede4);
+  background: #f1ece2;
 }
 
 ::selection {

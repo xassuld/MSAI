@@ -61,7 +61,7 @@ export default async function TicketPage({
     : ticketTierLabels[ticket.tier];
 
   return (
-    <main className="min-h-screen bg-[#f1ece2] px-4 py-10 sm:px-6 sm:py-16">
+    <main className="min-h-screen px-4 py-10 sm:px-6 sm:py-16">
       <article className="mx-auto w-full max-w-[720px] overflow-hidden rounded-[28px] border border-[#c7b995]/80 bg-[#fffdf8] text-[#15294b] shadow-[0_30px_90px_rgb(21_41_75/14%)]">
         <div aria-hidden="true" className="flex h-2">
           <span className="flex-1 bg-[#16845b]" />
