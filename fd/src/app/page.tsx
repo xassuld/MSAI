@@ -332,6 +332,12 @@ export default function Home() {
             >
               Privacy Policy
             </Link>
+            <Link
+              className="basis-full pt-1 text-[9px] font-medium normal-case tracking-normal text-[#15294b]/60 underline underline-offset-2 hover:text-[#15294b]"
+              href="/terms"
+            >
+              Terms of Service
+            </Link>
             <span className="basis-full pt-1 text-[8px] font-medium normal-case tracking-[.08em] text-[#15294b]/40">
               Made by Hasa
             </span>

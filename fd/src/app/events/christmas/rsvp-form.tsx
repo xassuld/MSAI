@@ -105,6 +105,13 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
             >
               Privacy Policy
             </Link>
+            {" "}and our{" "}
+            <Link
+              className="font-semibold text-[#15294b] underline underline-offset-2"
+              href="/terms"
+            >
+              Terms of Service
+            </Link>
             .
           </span>
         </label>
