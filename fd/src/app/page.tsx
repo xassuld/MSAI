@@ -66,10 +66,9 @@ const links: DirectoryLink[] = [
   {
     title: "About Us",
     note: "Get to know the MSAI community",
-    href: "https://www.facebook.com/profile.php?id=61595879544998",
+    href: "/about",
     icon: "about",
     tone: "gold",
-    external: true,
   },
   {
     title: "Contact Us",
