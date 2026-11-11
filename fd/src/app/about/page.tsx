@@ -37,12 +37,12 @@ const features = [
 
 const leadership = [
   { role: "President", name: "N. Margad" },
-  { role: "Vice President", name: "Y. Nandin-Erdene" },
+  { role: "Vice President", name: "U. Nandin-Erdene" },
   { role: "Secretary-General", name: "A. Khishigt" },
   { role: "Events & Culture Director", name: "A.L. Altangerel" },
   { role: "Events & Culture Director", name: "A. Mereke" },
   { role: "Communications Director", name: "M. Shine-od" },
-  { role: "Academic & Career Director", name: "E. Egsigl" },
+  { role: "Academic & Career Director", name: "E. Egshiglen" },
 ];
 
 export default function AboutPage() {
