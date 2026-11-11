@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
 
 type IconName =
@@ -325,6 +326,12 @@ export default function Home() {
             <span className="h-px w-5 bg-[#15294b]/55" />
             Mongolian Students’ Association in Italy
             <span className="h-px w-5 bg-[#15294b]/55" />
+            <Link
+              className="basis-full pt-1 text-[9px] font-medium normal-case tracking-normal text-[#15294b]/60 underline underline-offset-2 hover:text-[#15294b]"
+              href="/privacy"
+            >
+              Privacy Policy
+            </Link>
             <span className="basis-full pt-1 text-[8px] font-medium normal-case tracking-[.08em] text-[#15294b]/40">
               Made by Hasa
             </span>

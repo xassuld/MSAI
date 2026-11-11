@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { backendApiUrl } from "@/lib/backend-api";
 
 export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
@@ -97,7 +98,14 @@ export default function RsvpForm({ soldOut = false }: { soldOut?: boolean }) {
           <span>
             I agree to provide my name and email to process my ticket purchase
             and receive my admission ticket. I understand all ticket sales are
-            final and non-refundable.
+            final and non-refundable. See our{" "}
+            <Link
+              className="font-semibold text-[#15294b] underline underline-offset-2"
+              href="/privacy"
+            >
+              Privacy Policy
+            </Link>
+            .
           </span>
         </label>
         <button
