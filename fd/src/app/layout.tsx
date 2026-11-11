@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "Mongolian Students in Italy",
   description:
     "A little help from home for Mongolian students studying in Italy.",
+  verification: {
+    google: "h35UNbLAFf-lpMfGcV2QHc5Ow-h4m00ZMLKGWEOZw9w",
+  },
   icons: {
     icon: "/msai-logo.png",
     apple: "/msai-logo.png",
