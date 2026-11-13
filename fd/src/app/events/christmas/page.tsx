@@ -35,19 +35,19 @@ const ticketTiers = [
     key: "earlyBird",
     name: "Early Bird",
     priceKey: "earlyBird",
-    ticketRange: "First 20 paid sales",
+    ticketRange: null,
   },
   {
     key: "regular",
     name: "Regular",
     priceKey: "regular",
-    ticketRange: "Next 55 paid sales",
+    ticketRange: null,
   },
   {
     key: "late",
     name: "Late",
     priceKey: "late",
-    ticketRange: "Next 25 paid sales",
+    ticketRange: null,
   },
   {
     key: "atGate",
@@ -226,54 +226,34 @@ export default async function ChristmasPage() {
                       <p className="mt-1 text-xl font-semibold">
                         {formatPrice(event.ticketPrices[tier.priceKey] / 100)}
                       </p>
-                      <p
-                        className={`mt-1 text-[10px] leading-relaxed ${
-                          tier.key === "atGate"
-                            ? "text-white/75"
-                            : "text-[#24523c]/75"
-                        }`}
-                      >
-                        {tier.ticketRange}
-                      </p>
+                      {tier.ticketRange && (
+                        <p
+                          className={`mt-1 text-[10px] leading-relaxed ${
+                            tier.key === "atGate"
+                              ? "text-white/75"
+                              : "text-[#24523c]/75"
+                          }`}
+                        >
+                          {tier.ticketRange}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>
-                {!event.isSoldOut &&
-                activeTicket?.key === "earlyBird" &&
-                event.activeTier !== null ? (
-                  <div
-                    aria-label={`${event.activeTier.remaining} Early Bird tickets remaining`}
-                    className="mt-4 flex items-center justify-between gap-4 rounded-xl border-2 border-[#923a35]/50 bg-[#fff8e6] px-4 py-3 shadow-[0_8px_20px_rgb(146_58_53/12%)]"
-                    role="status"
-                  >
-                    <div>
-                      <p className="text-[10px] font-black uppercase tracking-[.14em] text-[#923a35]">
-                        Early Bird availability
-                      </p>
-                      <p className="mt-1 text-sm font-semibold text-[#15294b]">
-                        Tickets remaining at this price
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 items-baseline gap-1 rounded-lg bg-[#923a35] px-3 py-2 text-white">
-                      <span className="text-3xl font-black leading-none tabular-nums">
-                        {event.activeTier.remaining}
-                      </span>
-                      <span className="text-[9px] font-black uppercase tracking-[.1em]">
-                        left
-                      </span>
-                    </div>
-                  </div>
-                ) : (
+                {event.isSoldOut ? (
                   <p className="mt-3 text-xs font-semibold">
-                    {event.isSoldOut
-                      ? event.gateTicketsRemaining > 0
-                        ? `Online sales are closed. ${event.gateTicketsRemaining} cash-only At-gate ${
-                            event.gateTicketsRemaining === 1 ? "ticket is" : "tickets are"
-                          } available in person.`
-                        : "Sold out — all 120 admission tickets have been issued."
-                      : `${event.activeTier?.name ?? "Tickets"} · ${event.activeTier?.remaining ?? 0} tickets remaining`}
+                    {event.gateTicketsRemaining > 0
+                      ? `Online sales are closed. ${event.gateTicketsRemaining} cash-only At-gate ${
+                          event.gateTicketsRemaining === 1 ? "ticket is" : "tickets are"
+                        } available in person.`
+                      : "Sold out — all 120 admission tickets have been issued."}
                   </p>
-                )}
+                ) : activeTicket?.key !== "earlyBird" ? (
+                  <p className="mt-3 text-xs font-semibold">
+                    {event.activeTier?.name ?? "Tickets"} ·{" "}
+                    {event.activeTier?.remaining ?? 0} tickets remaining
+                  </p>
+                ) : null}
               </div>
             </section>
 
