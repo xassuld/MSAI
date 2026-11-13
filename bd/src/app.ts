@@ -27,13 +27,15 @@ import {
   getTicketPrices,
   resolveTicketTier,
 } from "./ticketing.js";
+import { getActivePaymentAuthorizations } from "./payment-authorizations.js";
 import {
+  confirmCheckoutSession,
   createCheckoutSession,
   handleStripeWebhook,
 } from "./ticketing-controller.js";
+import { deliverAdmissionTicket } from "./admission-ticket-delivery.js";
 import { mongooseReady } from "./mongoose.js";
 import { EventModel, TicketModel, type TicketDocument } from "./models.js";
-import { sendAdmissionTicket } from "./ticket-email.js";
 
 validateEnvironment();
 
@@ -146,30 +148,6 @@ function eventFieldsAreValid(value: unknown): value is EditableEvent {
   return true;
 }
 
-async function deliverComplimentaryTicket(ticket: TicketDocument): Promise<void> {
-  if (!ticket.email) {
-    throw new Error("Complimentary ticket has no recipient email.");
-  }
-  const event = await getChristmasEvent();
-  await sendAdmissionTicket(
-    ticket.email,
-    ticket.name,
-    ticket.ticketCode,
-    ticket.ticketTier,
-    event,
-    0,
-    true,
-  );
-  await TicketModel.updateOne(
-    {
-      ticketCode: ticket.ticketCode,
-      isComplimentary: true,
-      emailSentAt: { $exists: false },
-    },
-    { $set: { emailSentAt: new Date() } },
-  );
-}
-
 app.get("/api/health", (_request, response) => {
   response.json({ status: "ok" });
 });
@@ -181,29 +159,40 @@ app.get("/api/events/christmas", async (_request, response, next) => {
     await ensureChristmasEventState(event);
     await mongooseReady;
     const registrationState = await EventModel.findById("christmas")
-      .select("soldCount onlineSoldCount gateSaleCount ticketCount ticketPrices")
+      .select(
+        "soldCount onlineSoldCount onlineReservedCount gateSaleCount ticketCount ticketPrices",
+      )
       .lean();
     const soldCount = await getPaidAdmissionTicketCount();
     const onlineSoldCount = registrationState?.onlineSoldCount ?? 0;
+    const onlineReservedCount = registrationState?.onlineReservedCount ?? 0;
+    const allocatedOnlineCount = onlineSoldCount + onlineReservedCount;
     const gateSaleCount = registrationState?.gateSaleCount ?? 0;
     const ticketCount = registrationState?.ticketCount ?? 0;
     const ticketPrices = getTicketPrices(registrationState?.ticketPrices);
     const activeTier =
-      onlineSoldCount < 20
-        ? { name: "Early Bird", price: ticketPrices.earlyBird / 100, remaining: 20 - onlineSoldCount }
-        : onlineSoldCount < 75
-          ? { name: "Regular", price: ticketPrices.regular / 100, remaining: 75 - onlineSoldCount }
-          : onlineSoldCount < 100
-            ? { name: "Late", price: ticketPrices.late / 100, remaining: 100 - onlineSoldCount }
+      allocatedOnlineCount < 20
+        ? { name: "Early Bird", price: ticketPrices.earlyBird / 100, remaining: 20 - allocatedOnlineCount }
+        : allocatedOnlineCount < 75
+          ? { name: "Regular", price: ticketPrices.regular / 100, remaining: 75 - allocatedOnlineCount }
+          : allocatedOnlineCount < 100
+            ? { name: "Late", price: ticketPrices.late / 100, remaining: 100 - allocatedOnlineCount }
             : null;
     response.json({
       ...event,
       maxCapacity: 120,
       soldCount,
       totalRegistered: ticketCount,
-      isSoldOut: onlineSoldCount >= 100 || soldCount >= 120,
-      gateTicketsRemaining: Math.max(0, Math.min(20 - gateSaleCount, 120 - soldCount)),
-      onlineTicketsRemaining: Math.max(0, Math.min(100 - onlineSoldCount, 120 - soldCount)),
+      isSoldOut:
+        allocatedOnlineCount >= 100 || soldCount + onlineReservedCount >= 120,
+      gateTicketsRemaining: Math.max(
+        0,
+        Math.min(20 - gateSaleCount, 120 - soldCount - onlineReservedCount),
+      ),
+      onlineTicketsRemaining: Math.max(
+        0,
+        Math.min(100 - allocatedOnlineCount, 120 - soldCount - onlineReservedCount),
+      ),
       ticketPrices,
       activeTier,
     });
@@ -269,6 +258,11 @@ app.get("/api/tickets/:ticketCode", async (request, response, next) => {
 app.post("/api/events/christmas/checkout", async (request, response, next) => {
   if (!requireSameOrigin(request, response)) return;
   await createCheckoutSession(request, response, next);
+});
+
+app.post("/api/events/christmas/checkout/confirm", async (request, response, next) => {
+  if (!requireSameOrigin(request, response)) return;
+  await confirmCheckoutSession(request, response, next);
 });
 
 app.post("/api/admin/login", async (request, response, next) => {
@@ -379,7 +373,11 @@ app.get("/api/admin/tickets", async (request, response, next) => {
       return;
     }
 
-    const sentTickets = await getSentAdmissionTickets();
+    await ensureChristmasEventState(await getChristmasEvent());
+    const [sentTickets, pendingAuthorizations] = await Promise.all([
+      getSentAdmissionTickets(),
+      getActivePaymentAuthorizations(),
+    ]);
     response.set("Cache-Control", "no-store");
     response.json({
       sentTickets: sentTickets.map((ticket) => ({
@@ -389,6 +387,12 @@ app.get("/api/admin/tickets", async (request, response, next) => {
         ticketNumber: ticket.ticketNumber,
         isSandbox: ticket.isSandbox,
         emailSentAt: ticket.emailSentAt?.toISOString() ?? null,
+      })),
+      pendingAuthorizations: pendingAuthorizations.map((authorization) => ({
+        ...authorization,
+        amountAuthorizedCents: authorization.amountAuthorizedCents,
+        expiresAt: authorization.expiresAt.toISOString(),
+        createdAt: authorization.createdAt.toISOString(),
       })),
     });
   } catch (error) {
@@ -466,7 +470,7 @@ app.post("/api/admin/tickets/complimentary", async (request, response, next) => 
     }
 
     try {
-      await deliverComplimentaryTicket(ticket);
+      await deliverAdmissionTicket(ticket);
     } catch (error) {
       console.error("Complimentary ticket was created but email delivery failed.", {
         ticketNumber: ticket.ticketNumber,
@@ -534,19 +538,26 @@ app.post("/api/admin/tickets/gate", async (request, response, next) => {
         const updatedEvent = await EventModel.findOneAndUpdate(
           {
             _id: "christmas",
-            soldCount: { $lt: 120 },
             gateSaleCount: { $lt: 20 },
+            $expr: {
+              $lt: [
+                { $add: ["$soldCount", "$onlineReservedCount"] },
+                120,
+              ],
+            },
           },
           { $inc: { soldCount: 1, gateSaleCount: 1, ticketCount: 1 } },
           { new: true, session: mongoSession },
         );
         if (!updatedEvent) {
           const currentEvent = await EventModel.findById("christmas")
-            .select("soldCount gateSaleCount ticketPrices")
+            .select("soldCount onlineReservedCount gateSaleCount ticketPrices")
             .session(mongoSession)
             .lean();
           soldOut =
-            (currentEvent?.soldCount ?? 0) >= 120 ||
+            (currentEvent?.soldCount ?? 0) +
+              (currentEvent?.onlineReservedCount ?? 0) >=
+              120 ||
             (currentEvent?.gateSaleCount ?? 0) >= 20;
           return;
         }
@@ -620,18 +631,25 @@ app.post("/api/admin/tickets/:ticketNumber/resend", async (request, response, ne
     await mongooseReady;
     const ticket = await TicketModel.findOne({
       ticketNumber,
-      isComplimentary: true,
       emailSentAt: { $exists: false },
+      $or: [
+        { isComplimentary: true },
+        { isPaid: true, paymentMethod: { $ne: "cash" } },
+      ],
     });
     if (!ticket) {
-      response.status(404).json({ error: "Unsent complimentary ticket not found." });
+      response.status(404).json({ error: "Unsent online ticket not found." });
       return;
     }
 
     try {
-      await deliverComplimentaryTicket(ticket);
+      const deliveryStatus = await deliverAdmissionTicket(ticket);
+      if (deliveryStatus === "sending") {
+        response.status(409).json({ error: "Ticket email is already being sent." });
+        return;
+      }
     } catch (error) {
-      console.error("Could not resend complimentary ticket email.", {
+      console.error("Could not resend admission ticket email.", {
         ticketNumber,
         error,
       });

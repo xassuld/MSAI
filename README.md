@@ -9,7 +9,7 @@ The site is split into two workspace projects:
 
 1. Keep backend credentials in `bd/.env.local`. Start from `bd/.env.example` if setting up a new machine. The backend also loads `bd/.env` as a fallback. Do not copy backend secrets into the frontend.
 2. Set `ADMIN_PASSWORD` and an `ADMIN_SESSION_SECRET` with at least 32 characters in `bd/.env.local`.
-3. Configure Stripe keys in `bd/.env.local`: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `FRONTEND_URL`. For local testing, use the Stripe CLI to forward `checkout.session.completed` events to `http://localhost:4000/api/webhooks/stripe`.
+3. Configure Stripe keys in `bd/.env.local`: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `FRONTEND_URL`. For local testing, use the Stripe CLI to forward `checkout.session.completed`, `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, and `payment_intent.canceled` events to `http://localhost:4000/api/webhooks/stripe`.
 4. Configure Gmail API OAuth credentials in `bd/.env.local` to send paid admission tickets: `GMAIL_USER`, `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, and `GMAIL_REFRESH_TOKEN`. This sends from Gmail over HTTPS and does not require owning a custom domain.
 5. Keep `NEXT_PUBLIC_API_URL=http://localhost:4000` in `fd/.env.local`.
 6. From the repository root, run `npm install` once, then `npm run dev`.
@@ -55,7 +55,13 @@ Keep backend secrets only in Render, never in the frontend project. Render sets 
 
 For Gmail API ticket setup, follow [GMAIL-API-SETUP.md](./GMAIL-API-SETUP.md). The sending address is the Gmail account you authorize; the website can continue using its `vercel.app` address.
 
-After both services are deployed, set the Render service URL as the frontend's `NEXT_PUBLIC_API_URL` and the frontend URL as both the backend's `FRONTEND_URL` and `FRONTEND_ORIGINS`, then redeploy both. Configure the Stripe webhook destination as `<backend-url>/api/webhooks/stripe` and subscribe to `checkout.session.completed`. MongoDB must support transactions (Atlas or a replica set). Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, then complete a Stripe test checkout and verify webhook fulfillment and Gmail ticket delivery. Admin sessions require HTTPS.
+After both services are deployed, set the Render service URL as the frontend's `NEXT_PUBLIC_API_URL` and the frontend URL as both the backend's `FRONTEND_URL` and `FRONTEND_ORIGINS`, then redeploy both. Configure the Stripe webhook destination as `<backend-url>/api/webhooks/stripe` and subscribe to `checkout.session.completed`, `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, and `payment_intent.canceled`. MongoDB must support transactions (Atlas or a replica set). Verify `/api/health`, sign in at `/admin`, save an event change, confirm it appears on the public event page, then complete a Stripe test checkout and verify webhook fulfillment and Gmail ticket delivery. Admin sessions require HTTPS.
+
+The Stripe success page also verifies the Checkout session with Stripe and can fulfill a paid ticket if the webhook is delayed or missed. It uses the same idempotent fulfillment flow as the webhook.
+
+If Stripe reports a card authorization that is not yet captured, it is listed in the admin ticket page and reserves one online capacity slot until capture or authorization expiry. No ticket or email is issued until Stripe confirms capture.
+
+If an online ticket is issued but its email delivery fails, the admin ticket list marks it as unsent and provides a **Retry email** action. Check the Render logs and resolve any Gmail API configuration issue before retrying.
 
 GitHub Actions runs lint and the production build on pushes and pull requests. The build also type-checks the backend.
 

@@ -18,6 +18,16 @@ type SentTicketRecipient = {
   emailSentAt: string | null;
 };
 
+type PendingPaymentAuthorization = {
+  stripePaymentIntentId: string;
+  name: string;
+  email: string;
+  ticketTier: "earlyBird" | "regular" | "late";
+  amountAuthorizedCents: number;
+  currency: string;
+  expiresAt: string;
+};
+
 const ticketTierLabels = {
   earlyBird: "Early Bird",
   regular: "Regular",
@@ -29,6 +39,8 @@ const ticketTierLabels = {
 export default function AdminTicketListPage() {
   const router = useRouter();
   const [tickets, setTickets] = useState<SentTicketRecipient[] | null>(null);
+  const [pendingAuthorizations, setPendingAuthorizations] =
+    useState<PendingPaymentAuthorization[] | null>(null);
   const [error, setError] = useState("");
   const [requiresLogin, setRequiresLogin] = useState(false);
   const [deletingTicketNumber, setDeletingTicketNumber] = useState<number | null>(
@@ -52,15 +64,23 @@ export default function AdminTicketListPage() {
         const result = (await response.json()) as {
           error?: string;
           sentTickets?: SentTicketRecipient[];
+          pendingAuthorizations?: PendingPaymentAuthorization[];
         };
         if (response.status === 401) {
           if (active) setRequiresLogin(true);
           return;
         }
-        if (!response.ok || !Array.isArray(result.sentTickets)) {
+        if (
+          !response.ok ||
+          !Array.isArray(result.sentTickets) ||
+          !Array.isArray(result.pendingAuthorizations)
+        ) {
           throw new Error(result.error ?? "Could not load ticket recipients.");
         }
-        if (active) setTickets(result.sentTickets);
+        if (active) {
+          setTickets(result.sentTickets);
+          setPendingAuthorizations(result.pendingAuthorizations);
+        }
       })
       .catch((cause: unknown) => {
         if (active) {
@@ -81,7 +101,7 @@ export default function AdminTicketListPage() {
     if (requiresLogin) router.replace("/admin");
   }, [requiresLogin, router]);
 
-  async function resendComplimentaryTicket(ticket: SentTicketRecipient) {
+  async function resendTicketEmail(ticket: SentTicketRecipient) {
     setResendingTicketNumber(ticket.ticketNumber);
     setActionMessage("");
     try {
@@ -94,7 +114,7 @@ export default function AdminTicketListPage() {
         emailSentAt?: string;
       };
       if (!response.ok || !result.emailSentAt) {
-        throw new Error(result.error ?? "Could not resend complimentary ticket.");
+        throw new Error(result.error ?? "Could not resend ticket email.");
       }
       setTickets((current) =>
         current?.map((item) =>
@@ -106,7 +126,7 @@ export default function AdminTicketListPage() {
       setActionMessage(`Ticket #${ticket.ticketNumber} was emailed to ${ticket.email}.`);
     } catch (cause) {
       setActionMessage(
-        cause instanceof Error ? cause.message : "Could not resend complimentary ticket.",
+        cause instanceof Error ? cause.message : "Could not resend ticket email.",
       );
     } finally {
       setResendingTicketNumber(null);
@@ -153,11 +173,17 @@ export default function AdminTicketListPage() {
         const ticketsResult = (await ticketsResponse.json()) as {
           error?: string;
           sentTickets?: SentTicketRecipient[];
+          pendingAuthorizations?: PendingPaymentAuthorization[];
         };
-        if (!ticketsResponse.ok || !Array.isArray(ticketsResult.sentTickets)) {
+        if (
+          !ticketsResponse.ok ||
+          !Array.isArray(ticketsResult.sentTickets) ||
+          !Array.isArray(ticketsResult.pendingAuthorizations)
+        ) {
           throw new Error(ticketsResult.error ?? "Could not refresh the ticket list.");
         }
         setTickets(ticketsResult.sentTickets);
+        setPendingAuthorizations(ticketsResult.pendingAuthorizations);
       } catch (cause) {
         setError(
           cause instanceof Error
@@ -209,6 +235,56 @@ export default function AdminTicketListPage() {
           </Link>
         </div>
         <AdminNavigation active="recipients" />
+        {pendingAuthorizations && pendingAuthorizations.length > 0 && (
+          <section className="mb-8 rounded-2xl border border-[#d6a646]/50 bg-[#fff8df] p-5">
+            <h2 className="font-serif text-xl">Card authorizations on hold</h2>
+            <p className="mt-1 text-sm text-[#62645f]">
+              These authorizations reserve capacity but are not captured payments.
+              No ticket or email is issued until Stripe confirms capture.
+            </p>
+            <div className="mt-4 overflow-auto rounded-xl border border-[#c7b995] bg-[#fffdf8]">
+              <table className="w-full min-w-[760px] border-collapse text-left text-sm">
+                <thead className="bg-[#e8dfcf] text-[10px] uppercase tracking-[.12em] text-[#80643a]">
+                  <tr>
+                    <th className="border border-[#c7b995]/70 px-4 py-3">Name</th>
+                    <th className="border border-[#c7b995]/70 px-4 py-3">Email</th>
+                    <th className="border border-[#c7b995]/70 px-4 py-3">Amount</th>
+                    <th className="border border-[#c7b995]/70 px-4 py-3">Hold expires</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pendingAuthorizations.map((authorization) => (
+                    <tr key={authorization.stripePaymentIntentId}>
+                      <td className="border border-[#c7b995]/60 px-4 py-3 font-semibold">
+                        {authorization.name}
+                      </td>
+                      <td className="border border-[#c7b995]/60 px-4 py-3">
+                        {authorization.email}
+                      </td>
+                      <td className="border border-[#c7b995]/60 px-4 py-3">
+                        {(authorization.amountAuthorizedCents / 100).toLocaleString(
+                          "en",
+                          {
+                            style: "currency",
+                            currency: authorization.currency.toUpperCase(),
+                          },
+                        )}
+                      </td>
+                      <td className="border border-[#c7b995]/60 px-4 py-3">
+                        <time dateTime={authorization.expiresAt}>
+                          {new Intl.DateTimeFormat("en", {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          }).format(new Date(authorization.expiresAt))}
+                        </time>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="font-serif text-xl">All ticket holders</h2>
@@ -348,18 +424,20 @@ export default function AdminTicketListPage() {
                     </td>
                     <td className="border border-[#c7b995]/60 px-4 py-3">
                       <div className="flex flex-nowrap gap-2">
-                        {ticket.isComplimentary && !ticket.emailSentAt && (
+                        {!ticket.isGateSale &&
+                          ticket.email &&
+                          !ticket.emailSentAt && (
                           <button
                             className="whitespace-nowrap rounded-full border border-[#15294b]/30 px-3 py-1.5 text-xs font-semibold hover:bg-[#e8dfcf] disabled:opacity-50"
                             disabled={resendingTicketNumber !== null}
-                            onClick={() => void resendComplimentaryTicket(ticket)}
+                            onClick={() => void resendTicketEmail(ticket)}
                             type="button"
                           >
                             {resendingTicketNumber === ticket.ticketNumber
                               ? "Sending…"
                               : "Retry email"}
                           </button>
-                        )}
+                          )}
                         <button
                           className="whitespace-nowrap rounded-full border border-[#923a35]/40 px-3 py-1.5 text-xs font-semibold text-[#923a35] hover:bg-[#f0ded6] disabled:opacity-50"
                           disabled={deletingTicketNumber !== null}

@@ -35,5 +35,8 @@ Save the environment and deploy the commit that includes Gmail API support.
 
 The sender account must match the Gmail account used to grant consent. Verify
 ticket delivery by completing a Stripe test checkout and confirming the
-`checkout.session.completed` webhook. Check the Render logs if the Gmail API
-returns an error.
+`checkout.session.completed` webhook. Also subscribe the webhook to
+`payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, and
+`payment_intent.canceled` so unexpected authorization holds can reserve
+capacity and be reconciled after capture or cancellation. Check the Render logs
+if the Gmail API returns an error.

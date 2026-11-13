@@ -9,6 +9,7 @@ const eventSchema = new Schema(
     maxCapacity: { type: Number, required: true, min: 1, default: 120 },
     soldCount: { type: Number, required: true, min: 0, default: 0 },
     onlineSoldCount: { type: Number, required: true, min: 0, default: 0 },
+    onlineReservedCount: { type: Number, required: true, min: 0, default: 0 },
     gateSaleCount: { type: Number, required: true, min: 0, default: 0 },
     ticketCount: { type: Number, required: true, min: 0, default: 0 },
     countersInitialized: { type: Boolean, required: true, default: false },
@@ -64,6 +65,7 @@ const ticketSchema = new Schema(
     isComplimentary: { type: Boolean, required: true, default: false },
     isCheckedIn: { type: Boolean, required: true, default: false },
     checkedInAt: Date,
+    emailSendingAt: Date,
     emailSentAt: Date,
   },
   {
@@ -72,19 +74,63 @@ const ticketSchema = new Schema(
   },
 );
 
+const paymentAuthorizationSchema = new Schema(
+  {
+    stripeSessionId: { type: String, required: true },
+    stripePaymentIntentId: { type: String, required: true },
+    name: { type: String, required: true, trim: true },
+    email: { type: String, required: true, lowercase: true, trim: true },
+    ticketTier: {
+      type: String,
+      required: true,
+      enum: ["earlyBird", "regular", "late"],
+    },
+    amountAuthorizedCents: { type: Number, required: true, min: 1, max: 1000000 },
+    currency: { type: String, required: true, default: "eur", lowercase: true },
+    status: {
+      type: String,
+      required: true,
+      enum: ["authorized", "captured", "released", "expired"],
+      default: "authorized",
+    },
+    expiresAt: { type: Date, required: true },
+  },
+  {
+    collection: "christmas_payment_authorizations",
+    timestamps: true,
+  },
+);
+
 ticketSchema.index({ email: 1 });
 ticketSchema.index({ ticketCode: 1 }, { unique: true });
 ticketSchema.index({ stripeSessionId: 1 }, { unique: true, sparse: true });
+paymentAuthorizationSchema.index({ stripeSessionId: 1 }, { unique: true });
+paymentAuthorizationSchema.index({ stripePaymentIntentId: 1 }, { unique: true });
+paymentAuthorizationSchema.index({ status: 1, expiresAt: 1 });
 
 export type EventDocument = InferSchemaType<typeof eventSchema>;
 export type TicketDocument = InferSchemaType<typeof ticketSchema>;
+export type PaymentAuthorizationDocument = InferSchemaType<
+  typeof paymentAuthorizationSchema
+>;
 
 export const EventModel = models.Event ?? model("Event", eventSchema);
 export const TicketModel =
   models.ChristmasAdmissionTicket ??
   model("ChristmasAdmissionTicket", ticketSchema);
+export const PaymentAuthorizationModel =
+  models.ChristmasPaymentAuthorization ??
+  model("ChristmasPaymentAuthorization", paymentAuthorizationSchema);
 
 let ticketIndexesReady: Promise<void> | undefined;
+let paymentAuthorizationIndexesReady: Promise<void> | undefined;
+
+export function ensurePaymentAuthorizationIndexes(): Promise<void> {
+  paymentAuthorizationIndexesReady ??= PaymentAuthorizationModel.createIndexes().then(
+    () => undefined,
+  );
+  return paymentAuthorizationIndexesReady;
+}
 
 export function ensureTicketIndexes(): Promise<void> {
   ticketIndexesReady ??= (async () => {

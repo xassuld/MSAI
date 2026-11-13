@@ -57,6 +57,12 @@ parsing. Stripe signature verification is required. On
 3. Creates a paid ticket with a unique eight-character code, sequential ticket
    number, tier, amount, and Stripe identifiers.
 
+If a Checkout session completes with an authorized but uncaptured PaymentIntent,
+the backend records the authorization and reserves one online capacity slot.
+`payment_intent.succeeded` converts that reservation into a paid ticket;
+`payment_intent.canceled` releases it. Pending authorizations are visible to
+admins but do not count as paid sales or generate ticket emails.
+
 After commit, Gmail delivers the ticket and an embedded QR code containing the
 public online ticket URL, displayed prominently in the admission pass. Scanning
 the QR code opens the ticket details page. The public online ticket page also
@@ -123,7 +129,9 @@ indexes when initializing the updated ticket indexes.
 
 - Configure `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `FRONTEND_URL`
   only in the backend environment. Set the Stripe webhook destination to
-  `/api/webhooks/stripe` and subscribe to `checkout.session.completed`.
+  `/api/webhooks/stripe` and subscribe to `checkout.session.completed`,
+  `payment_intent.amount_capturable_updated`, `payment_intent.succeeded`, and
+  `payment_intent.canceled`.
 - Keep MongoDB, Gmail, Stripe, Cloudinary, and admin credentials backend-only.
 - Admin mutations require the existing same-origin check and iron-session.
 - Verify all three online price bands, the 20 cash gate tickets, successful

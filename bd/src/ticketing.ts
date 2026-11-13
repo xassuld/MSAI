@@ -2,6 +2,7 @@ import { randomInt } from "node:crypto";
 import mongoose from "mongoose";
 import { mongooseReady } from "./mongoose.js";
 import { ensureTicketIndexes, EventModel, TicketModel } from "./models.js";
+import { expirePaymentAuthorizations } from "./payment-authorizations.js";
 import type { EventData } from "./event-data.js";
 
 export const ticketTiers = {
@@ -67,6 +68,7 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       $setOnInsert: {
         soldCount: 0,
         onlineSoldCount: 0,
+        onlineReservedCount: 0,
         gateSaleCount: 0,
         ticketCount: 0,
         countersInitialized: true,
@@ -105,6 +107,10 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
     EventModel.updateOne(
       { _id: "christmas", onlineSoldCount: { $exists: false } },
       { $set: { onlineSoldCount: onlinePaidTicketCount } },
+    ),
+    EventModel.updateOne(
+      { _id: "christmas", onlineReservedCount: { $exists: false } },
+      { $set: { onlineReservedCount: 0 } },
     ),
     EventModel.updateOne(
       { _id: "christmas", gateSaleCount: { $exists: false } },
@@ -163,4 +169,6 @@ export async function ensureChristmasEventState(event: EventData): Promise<void>
       await session.endSession();
     }
   }
+
+  await expirePaymentAuthorizations();
 }

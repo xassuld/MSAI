@@ -3,8 +3,18 @@ import mongoose from "mongoose";
 import Stripe from "stripe";
 import type { NextFunction, Request, Response } from "express";
 import { getChristmasEvent, getRegistrationRetryAfter } from "./event-data.js";
+import { deliverAdmissionTicket } from "./admission-ticket-delivery.js";
 import { mongooseReady } from "./mongoose.js";
-import { EventModel, TicketModel, type TicketDocument } from "./models.js";
+import {
+  EventModel,
+  PaymentAuthorizationModel,
+  TicketModel,
+  type TicketDocument,
+} from "./models.js";
+import {
+  finishPaymentAuthorization,
+  recordPaymentAuthorization,
+} from "./payment-authorizations.js";
 import {
   ensureChristmasEventState,
   generateTicketCode,
@@ -12,7 +22,6 @@ import {
   resolveTicketTier,
   ticketTiers,
 } from "./ticketing.js";
-import { sendAdmissionTicket } from "./ticket-email.js";
 
 const onlineTicketLimit = 100;
 const totalTicketLimit = 120;
@@ -69,19 +78,20 @@ export async function createCheckoutSession(
     await mongooseReady;
     await ensureChristmasEventState(await getChristmasEvent());
     const event = await EventModel.findById("christmas")
-      .select("soldCount onlineSoldCount ticketPrices")
+      .select("soldCount onlineSoldCount onlineReservedCount ticketPrices")
       .lean();
     const onlineSoldCount = event?.onlineSoldCount ?? 0;
+    const onlineReservedCount = event?.onlineReservedCount ?? 0;
     if (
-      onlineSoldCount >= onlineTicketLimit ||
-      (event?.soldCount ?? 0) >= totalTicketLimit
+      onlineSoldCount + onlineReservedCount >= onlineTicketLimit ||
+      (event?.soldCount ?? 0) + onlineReservedCount >= totalTicketLimit
     ) {
       response.status(409).json({ error: "Event is completely sold out." });
       return;
     }
 
     const tier = resolveTicketTier(
-      onlineSoldCount,
+      onlineSoldCount + onlineReservedCount,
       getTicketPrices(event?.ticketPrices),
     );
     const frontendUrl = process.env.FRONTEND_URL;
@@ -102,6 +112,9 @@ export async function createCheckoutSession(
         },
       ],
       mode: "payment",
+      payment_intent_data: {
+        capture_method: "automatic",
+      },
       customer_email: email,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
       metadata: {
@@ -153,15 +166,188 @@ export async function handleStripeWebhook(
     return;
   }
 
-  if (event.type !== "checkout.session.completed") {
+  try {
+    if (event.type === "checkout.session.completed") {
+      const checkoutSession = event.data.object;
+      if (checkoutSession.payment_status === "paid") {
+        const status = await fulfillPaidCheckoutSession(checkoutSession);
+        if (status === "processing") {
+          throw new Error("Stripe ticket email delivery is already in progress.");
+        }
+      } else {
+        await recordAuthorizedCheckoutSession(checkoutSession);
+      }
+    } else if (event.type === "payment_intent.amount_capturable_updated") {
+      const checkoutSession = await getCheckoutSessionForPaymentIntent(
+        event.data.object.id,
+      );
+      if (checkoutSession?.metadata?.eventId === "christmas") {
+        await recordAuthorizedCheckoutSession(checkoutSession);
+      }
+    } else if (event.type === "payment_intent.succeeded") {
+      const checkoutSession = await getCheckoutSessionForPaymentIntent(
+        event.data.object.id,
+      );
+      if (checkoutSession?.metadata?.eventId === "christmas") {
+        if (checkoutSession.payment_status !== "paid") {
+          throw new Error("Succeeded Stripe PaymentIntent has an unpaid Checkout session.");
+        }
+        const status = await fulfillPaidCheckoutSession(checkoutSession);
+        if (status === "processing") {
+          throw new Error("Stripe ticket email delivery is already in progress.");
+        }
+      }
+    } else if (event.type === "payment_intent.canceled") {
+      await finishPaymentAuthorization(event.data.object.id, "released");
+    }
     response.json({ received: true });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function confirmCheckoutSession(
+  request: Request,
+  response: Response,
+  next: NextFunction,
+): Promise<void> {
+  const sessionId =
+    typeof request.body?.sessionId === "string"
+      ? request.body.sessionId.trim()
+      : "";
+  if (!/^cs_(?:test|live)_[A-Za-z0-9]+$/.test(sessionId)) {
+    response.status(400).json({ error: "A valid Checkout session is required." });
     return;
   }
 
-  const checkoutSession = event.data.object;
+  try {
+    const checkoutSession = await getStripe().checkout.sessions.retrieve(sessionId);
+    if (checkoutSession.metadata?.eventId !== "christmas") {
+      response.status(404).json({ error: "Checkout session not found." });
+      return;
+    }
+    if (checkoutSession.payment_status !== "paid") {
+      const authorizationStatus =
+        await recordAuthorizedCheckoutSession(checkoutSession);
+      response.json({
+        status:
+          authorizationStatus === "recorded" ||
+          authorizationStatus === "alreadyRecorded"
+            ? "hold_reserved"
+            : authorizationStatus === "soldOut"
+              ? "hold_released"
+            : "awaiting_payment",
+      });
+      return;
+    }
+
+    response.json({
+      status: await fulfillPaidCheckoutSession(checkoutSession),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function getCheckoutSessionForPaymentIntent(
+  paymentIntentId: string,
+): Promise<Stripe.Checkout.Session | null> {
+  const sessions = await getStripe().checkout.sessions.list({
+    payment_intent: paymentIntentId,
+    limit: 1,
+  });
+  return sessions.data[0] ?? null;
+}
+
+async function recordAuthorizedCheckoutSession(
+  checkoutSession: Stripe.Checkout.Session,
+): Promise<"recorded" | "alreadyRecorded" | "soldOut" | "ignored"> {
+  if (
+    checkoutSession.status !== "complete" ||
+    checkoutSession.id.startsWith("cs_test_") ||
+    checkoutSession.metadata?.eventId !== "christmas"
+  ) {
+    return "ignored";
+  }
+
+  const paymentIntentId =
+    typeof checkoutSession.payment_intent === "string"
+      ? checkoutSession.payment_intent
+      : checkoutSession.payment_intent?.id;
+  if (!paymentIntentId) return "ignored";
+
+  const paymentIntent = await getStripe().paymentIntents.retrieve(
+    paymentIntentId,
+    { expand: ["latest_charge"] },
+  );
+  if (
+    paymentIntent.status !== "requires_capture" ||
+    paymentIntent.amount_capturable < 1
+  ) {
+    return "ignored";
+  }
+
+  const metadata = checkoutSession.metadata;
+  const tierKey = metadata.tier;
+  const amountCents = metadata.amountCents
+    ? Number(metadata.amountCents)
+    : undefined;
+  if (
+    !metadata.name?.trim() ||
+    !metadata.email?.trim() ||
+    !tierKey ||
+    !Object.hasOwn(ticketTiers, tierKey) ||
+    !Number.isInteger(checkoutSession.amount_total) ||
+    !Number.isSafeInteger(amountCents) ||
+    paymentIntent.amount_capturable !== checkoutSession.amount_total ||
+    checkoutSession.amount_total !== amountCents ||
+    paymentIntent.currency !== checkoutSession.currency
+  ) {
+    throw new Error("Authorized Stripe Checkout session has invalid fulfillment metadata.");
+  }
+
+  const latestCharge =
+    typeof paymentIntent.latest_charge === "object"
+      ? paymentIntent.latest_charge
+      : null;
+  const paymentMethodDetails = latestCharge?.payment_method_details;
+  const captureBefore =
+    paymentMethodDetails?.card?.capture_before ??
+    paymentMethodDetails?.card_present?.capture_before;
+  const expiresAt = new Date(
+    (captureBefore ?? paymentIntent.created + 7 * 24 * 60 * 60) * 1000,
+  );
+  if (expiresAt <= new Date()) {
+    await getStripe().paymentIntents.cancel(paymentIntent.id);
+    return "ignored";
+  }
+  await ensureChristmasEventState(await getChristmasEvent());
+  const result = await recordPaymentAuthorization({
+    stripeSessionId: checkoutSession.id,
+    stripePaymentIntentId: paymentIntent.id,
+    name: metadata.name.trim().replace(/\s+/g, " "),
+    email: metadata.email.trim().toLowerCase(),
+    ticketTier: tierKey as keyof typeof ticketTiers,
+    amountAuthorizedCents: paymentIntent.amount_capturable,
+    currency: paymentIntent.currency,
+    expiresAt,
+  });
+
+  if (result === "soldOut") {
+    await getStripe().paymentIntents.cancel(paymentIntent.id);
+    console.error(
+      "OVER CAPACITY: canceled an authorized Christmas ticket checkout.",
+      checkoutSession.id,
+    );
+  }
+  return result === "finished" ? "ignored" : result;
+}
+
+async function fulfillPaidCheckoutSession(
+  checkoutSession: Stripe.Checkout.Session,
+): Promise<"confirmed" | "processing" | "awaiting_payment" | "refunded"> {
   if (checkoutSession.payment_status !== "paid") {
-    response.json({ received: true });
-    return;
+    return "awaiting_payment";
   }
 
   const metadata = checkoutSession.metadata;
@@ -185,8 +371,7 @@ export async function handleStripeWebhook(
       (!Number.isSafeInteger(amountCents) || amountCents < 1)) ||
     !paymentIntentId
   ) {
-    next(new Error("Paid Stripe Checkout session has invalid fulfillment metadata."));
-    return;
+    throw new Error("Paid Stripe Checkout session has invalid fulfillment metadata.");
   }
 
   const tier = tierKey as keyof typeof ticketTiers;
@@ -194,8 +379,7 @@ export async function handleStripeWebhook(
     checkoutSession.amount_total !==
     (amountCents ?? ticketTiers[tier].amountInCents)
   ) {
-    next(new Error("Paid Stripe Checkout session amount does not match its ticket tier."));
-    return;
+    throw new Error("Paid Stripe Checkout session amount does not match its ticket tier.");
   }
   const email = metadata.email.trim().toLowerCase();
   const name = metadata.name.trim().replace(/\s+/g, " ");
@@ -211,9 +395,13 @@ export async function handleStripeWebhook(
       ticket: null,
       overCapacity: false,
     };
+    let activeAuthorization: Awaited<
+      ReturnType<typeof PaymentAuthorizationModel.findOne>
+    > | null = null;
     await activeSession.withTransaction(async () => {
       fulfillment.ticket = null;
       fulfillment.overCapacity = false;
+      activeAuthorization = null;
       const existingTicket = await TicketModel.findOne({
         stripeSessionId: checkoutSession.id,
       }).session(activeSession);
@@ -222,24 +410,74 @@ export async function handleStripeWebhook(
         return;
       }
 
+      if (!isSandbox) {
+        activeAuthorization = await PaymentAuthorizationModel.findOne({
+          stripePaymentIntentId: paymentIntentId,
+          status: "authorized",
+        }).session(activeSession);
+      }
+
       const updatedEvent = isSandbox
         ? await EventModel.findOneAndUpdate(
             { _id: "christmas" },
             { $inc: { ticketCount: 1 } },
             { new: true, session: activeSession },
           )
+        : activeAuthorization
+          ? await EventModel.findOneAndUpdate(
+              { _id: "christmas", onlineReservedCount: { $gt: 0 } },
+              {
+                $inc: {
+                  soldCount: 1,
+                  onlineSoldCount: 1,
+                  onlineReservedCount: -1,
+                  ticketCount: 1,
+                },
+              },
+              { new: true, session: activeSession },
+            )
         : await EventModel.findOneAndUpdate(
             {
               _id: "christmas",
-              soldCount: { $lt: totalTicketLimit },
-              onlineSoldCount: { $lt: onlineTicketLimit },
+              $expr: {
+                $and: [
+                  {
+                    $lt: [
+                      { $add: ["$soldCount", "$onlineReservedCount"] },
+                      totalTicketLimit,
+                    ],
+                  },
+                  {
+                    $lt: [
+                      { $add: ["$onlineSoldCount", "$onlineReservedCount"] },
+                      onlineTicketLimit,
+                    ],
+                  },
+                ],
+              },
             },
             { $inc: { soldCount: 1, onlineSoldCount: 1, ticketCount: 1 } },
             { new: true, session: activeSession },
           );
       if (!updatedEvent) {
+        if (activeAuthorization) {
+          throw new Error("Payment hold reservation disappeared before capture.");
+        }
         fulfillment.overCapacity = true;
         return;
+      }
+      if (activeAuthorization) {
+        const captured = await PaymentAuthorizationModel.updateOne(
+          {
+            stripePaymentIntentId: paymentIntentId,
+            status: "authorized",
+          },
+          { $set: { status: "captured" } },
+          { session: activeSession },
+        );
+        if (captured.modifiedCount !== 1) {
+          throw new Error("Payment authorization could not be marked captured.");
+        }
       }
 
       [fulfillment.ticket] = await TicketModel.create(
@@ -270,38 +508,15 @@ export async function handleStripeWebhook(
         "OVER CAPACITY: refunded a paid Christmas ticket checkout.",
         checkoutSession.id,
       );
-      response.json({ received: true });
-      return;
+      return "refunded";
     }
 
     const ticket = fulfillment.ticket;
     if (!ticket) {
       throw new Error("Stripe ticket fulfillment transaction returned no ticket.");
     }
-    if (ticket.emailSentAt) {
-      response.json({ received: true });
-      return;
-    }
-    if (!ticket.email) {
-      throw new Error("Paid ticket has no recipient email.");
-    }
-
-    const eventDetails = await getChristmasEvent();
-    await sendAdmissionTicket(
-      ticket.email,
-      ticket.name,
-      ticket.ticketCode,
-      ticket.ticketTier,
-      eventDetails,
-      ticket.amountPaidCents,
-    );
-    await TicketModel.updateOne(
-      { stripeSessionId: checkoutSession.id, emailSentAt: { $exists: false } },
-      { $set: { emailSentAt: new Date() } },
-    );
-    response.json({ received: true });
-  } catch (error) {
-    next(error);
+    const deliveryStatus = await deliverAdmissionTicket(ticket);
+    return deliveryStatus === "sending" ? "processing" : "confirmed";
   } finally {
     await mongoSession?.endSession();
   }
