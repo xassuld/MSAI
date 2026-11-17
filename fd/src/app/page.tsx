@@ -34,7 +34,7 @@ const links: DirectoryLink[] = [
   {
     title: "Sign up",
     note: "Join Mongolian students across Italy",
-    href: "https://forms.gle/ji65hGcf4hHHNrvi7",
+    href: "https://docs.google.com/forms/d/e/1FAIpQLSf6fME4l6wp11obrh0tDwFwAjNS0iVAG_NDnWk_6-mpI2Hheg/viewform",
     icon: "signup",
     tone: "gold",
     external: true,
